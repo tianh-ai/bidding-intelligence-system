@@ -1,0 +1,91 @@
+[tool.poetry]
+name = "bidding-intelligence-system"
+version = "1.0.0"
+description = "AI-powered bidding document analysis and generation system"
+authors = ["Bidding Team <team@example.com>"]
+readme = "README.md"
+packages = [{include = "backend"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.30.0"}
+pydantic = {extras = ["email"], version = "^2.10.0"}
+pydantic-settings = "^2.6.0"
+sqlalchemy = "^2.0.36"
+asyncpg = "^0.30.0"
+psycopg2-binary = "^2.9.9"
+
+# AI & ML
+openai = "^1.55.0"
+instructor = "^1.6.4"
+
+# Document Processing
+pypdf = "^5.1.0"
+python-docx = "^1.1.2"
+pdfplumber = "^0.11.4"
+pymupdf = "^1.24.0"
+paddleocr = "^2.8.1"
+
+# Async & Task Queue
+celery = {extras = ["redis"], version = "^5.4.0"}
+redis = "^5.0.1"
+redis-om = "^0.2.1"
+
+# Security & Auth
+fastapi-jwt-auth = "^0.5.0"
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+python-multipart = "^0.0.12"
+
+# Logging & Monitoring
+loguru = "^0.7.2"
+python-json-logger = "^2.0.7"
+
+# Utilities
+python-dotenv = "^1.0.0"
+httpx = "^0.27.0"
+aiofiles = "^24.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+black = "^24.10.0"
+flake8 = "^7.1.0"
+mypy = "^1.13.0"
+pre-commit = "^4.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
