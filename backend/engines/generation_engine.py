@@ -5,11 +5,12 @@
 """
 
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import datetime
 from core.logger import logger
+from core.llm_router import get_llm_router, TaskType
 
 
 class GenerationStrategy(str, Enum):
@@ -77,6 +78,9 @@ class GenerationEngine:
         logger.info("GenerationEngine initialized")
         self.generation_history: List[GenerationVersion] = []
         self.content_cache: Dict[str, str] = {}
+        self.llm_router = get_llm_router()  # 获取LLM路由器
+        logger.info("LLM Router integrated into GenerationEngine")
+        self.llm_router = get_llm_router()  # 获取LLM路由器
         
     async def generate_proposal(
         self,
@@ -241,29 +245,31 @@ class GenerationEngine:
         
         start_time = time.time()
         
-        # 根据策略选择生成源
+        # 根据策略选择生成源和置信度
         if strategy == GenerationStrategy.CONSERVATIVE:
-            # 保守策略：优先 KB，很少生成新内容
             source = "KB"
             confidence = 85.0
         elif strategy == GenerationStrategy.CREATIVE:
-            # 创意策略：更多 LLM 生成
             source = "LLM_GENERATE"
             confidence = 65.0
         else:  # BALANCED
-            # 平衡策略
             source = "LLM_ADAPT"
             confidence = 75.0
         
-        # 模拟生成过程
-        await asyncio.sleep(0.1)
+        # 使用LLM生成真实内容
+        try:
+            generated_text = await self._generate_with_llm(chapter_id, strategy)
+        except:
+            # 降级到模板
+            generated_text = self._generate_mock_text(chapter_id)
+            confidence -= 10  # 降低置信度
         
         elapsed = time.time() - start_time
         
         content = GeneratedContent(
             content_id=f"cnt_{chapter_id}_{datetime.now().timestamp()}",
             chapter_id=chapter_id,
-            content=self._generate_mock_text(chapter_id),
+            content=generated_text,
             source=source,
             confidence=confidence,
             tokens_used=150 + (50 if source == "LLM_GENERATE" else 0),
@@ -283,6 +289,72 @@ class GenerationEngine:
             "ch_5": "团队资质：团队成员具备丰富的行业经验..."
         }
         return templates.get(chapter_id, f"第 {chapter_id} 章内容")
+    
+    async def _generate_with_llm(
+        self,
+        chapter_id: str,
+        strategy: GenerationStrategy
+    ) -> str:
+        """使用LLM生成真实内容"""
+        # 章节描述映射
+        chapter_descriptions = {
+            "ch_1": "项目概述 - 介绍项目背景、目标和价值",
+            "ch_2": "技术方案 - 详细说明技术路线、架构设计和实施方法",
+            "ch_3": "商务报价 - 项目预算、成本分析和报价说明",
+            "ch_4": "实施计划 - 项目实施的时间安排、里程碑和交付物",
+            "ch_5": "团队组成 - 项目团队成员、资质和经验介绍"
+        }
+        
+        chapter_desc = chapter_descriptions.get(chapter_id, f"{chapter_id}章节内容")
+        
+        # 策略对应的系统提示
+        system_prompts = {
+            GenerationStrategy.CONSERVATIVE: "你是一位专业的投标文案撰写专家。请严格按照常规格式和要求，生成规范、稳健的投标文件内容。避免使用过于创新或冒险的表述。",
+            GenerationStrategy.BALANCED: "你是一位经验丰富的投标文案专家。请在遵守规范的基础上，适当融入创新元素，生成既专业又有亮点的投标文件内容。",
+            GenerationStrategy.CREATIVE: "你是一位富有创意的投标策划专家。请在保证专业性的前提下，大胆创新，提出独特的解决方案和亮点，使投标文件脱颖而出。"
+        }
+        
+        # 构建用户提示词
+        user_prompt = f"""请为投标文件生成【{chapter_desc}】的内容。
+
+要求：
+1. 内容专业、完整、有说服力
+2. 字数控制在300-500字之间
+3. 使用投标文件的正式语言风格
+4. 突出我方的优势和特点
+5. 避免空洞的套话，要有实质内容
+
+请直接生成内容，不要包含额外的说明。"""
+        
+        try:
+            # 使用DeepSeek生成内容
+            content = await self.llm_router.generate_text(
+                prompt=user_prompt,
+                system_prompt=system_prompts.get(strategy, system_prompts[GenerationStrategy.BALANCED]),
+                task_type=TaskType.GENERATION,
+                temperature=0.7 if strategy == GenerationStrategy.CREATIVE else 0.5,
+                model_name="deepseek"  # 明确使用DeepSeek生成
+            )
+            
+            logger.info(
+                f"LLM generated content for {chapter_id}",
+                extra={
+                    "chapter": chapter_id,
+                    "strategy": strategy.value,
+                    "content_length": len(content),
+                    "model": "deepseek"
+                }
+            )
+            
+            return content.strip()
+            
+        except Exception as e:
+            logger.error(
+                f"LLM generation failed, using template",
+                extra={"chapter": chapter_id, "error": str(e)}
+            )
+            # 失败时使用模板
+            return self._generate_mock_text(chapter_id)
     
     async def _calculate_quality_metrics(
         self,

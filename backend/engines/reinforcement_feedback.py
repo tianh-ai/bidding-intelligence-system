@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import datetime, timedelta
 from core.logger import logger
+from core.llm_router import get_llm_router, TaskType
 
 
 class FeedbackType(str, Enum):
@@ -93,6 +94,8 @@ class ReinforcementLearningFeedback:
         self.feedback_records: List[FeedbackRecord] = []
         self.pattern_history: List[PatternAnalysis] = []
         self.optimization_suggestions: List[OptimizationSuggestion] = []
+        self.llm_router = get_llm_router()  # 获取LLM路由器
+        logger.info("LLM Router integrated into ReinforcementLearningFeedback")
     
     async def record_error(
         self,
@@ -270,41 +273,122 @@ class ReinforcementLearningFeedback:
         self,
         errors: List[ErrorRecord]
     ) -> str:
-        """识别根本原因"""
-        # 简单的根本原因识别（实际实现可使用 NLP）
-        common_issues = {
-            "missing_content": "内容缺失",
-            "format_error": "格式错误",
-            "constraint_violation": "约束违反",
-            "spelling_error": "拼写错误",
-            "logic_error": "逻辑错误"
-        }
-        
-        # 统计错误描述中最常见的关键字
-        keywords_count = {}
-        for error in errors:
-            for keyword, issue in common_issues.items():
-                if keyword in error.description.lower():
-                    keywords_count[issue] = keywords_count.get(issue, 0) + 1
-        
-        if keywords_count:
-            most_common_issue = max(keywords_count, key=keywords_count.get)
-            return most_common_issue
-        
-        return "未知原因"
+        """使用LLM识别根本原因"""
+        try:
+            # 准备错误描述列表
+            error_descriptions = [
+                f"- {e.error_type}: {e.description} (位置: {e.location})"
+                for e in errors[:10]  # 最多分析10个错误
+            ]
+            
+            prompt = f"""分析以下错误记录，识别根本原因：
+
+错误列表：
+{chr(10).join(error_descriptions)}
+
+请分析这些错误的共同特征和根本原因，用一句话总结（不超过50字）。"""
+            
+            # 使用DeepSeek进行分析（擅长理解和推理）
+            root_cause = await self.llm_router.generate_text(
+                prompt=prompt,
+                system_prompt="你是一位经验丰富的质量分析专家，擅长发现问题的根本原因。",
+                task_type=TaskType.FEEDBACK,
+                temperature=0.3,
+                model_name="deepseek"
+            )
+            
+            logger.info(
+                f"LLM identified root cause",
+                extra={
+                    "error_count": len(errors),
+                    "root_cause": root_cause[:100],
+                    "model": "deepseek"
+                }
+            )
+            
+            return root_cause.strip()
+            
+        except Exception as e:
+            logger.warning(
+                f"LLM root cause analysis failed, using fallback",
+                extra={"error": str(e)}
+            )
+            # 降级到规则方法
+            common_issues = {
+                "missing_content": "内容缺失",
+                "format_error": "格式错误",
+                "constraint_violation": "约束违反",
+                "spelling_error": "拼写错误",
+                "logic_error": "逻辑错误"
+            }
+            
+            keywords_count = {}
+            for error in errors:
+                for keyword, issue in common_issues.items():
+                    if keyword in error.description.lower():
+                        keywords_count[issue] = keywords_count.get(issue, 0) + 1
+            
+            if keywords_count:
+                most_common_issue = max(keywords_count, key=keywords_count.get)
+                return most_common_issue
+            
+            return "未知原因"
     
     async def _generate_prevention_strategy(
         self,
         error_type: str,
         errors: List[ErrorRecord]
     ) -> str:
-        """生成预防策略"""
-        strategies = {
-            "missing_content": "增强内容检测机制，确保所有必需内容都被生成",
-            "format_error": "加强格式验证，使用模板约束输出格式",
-            "constraint_violation": "改进约束提取和检查逻辑",
-            "spelling_error": "集成拼写检查工具，进行后处理校对",
-            "logic_error": "增强逻辑验证，使用本体知识图谱进行一致性检查"
+        """使用LLM生成预防策略"""
+        try:
+            # 准备错误信息
+            error_summary = f"错误类型: {error_type}, 出现次数: {len(errors)}"
+            error_examples = [
+                f"- {e.description}"
+                for e in errors[:5]  # 最多5个例子
+            ]
+            
+            prompt = f"""基于以下错误情况，提出具体的预防策略：
+
+{error_summary}
+
+错误示例：
+{chr(10).join(error_examples)}
+
+请提出2-3条可操作的预防措施（每条不超过30字）。"""
+            
+            # 使用千问生成建议（擅长分析和建议）
+            strategy = await self.llm_router.generate_text(
+                prompt=prompt,
+                system_prompt="你是一位质量改进专家，擅长提出实用的预防措施和优化建议。",
+                task_type=TaskType.ANALYSIS,
+                temperature=0.4,
+                model_name="qwen"
+            )
+            
+            logger.info(
+                f"LLM generated prevention strategy",
+                extra={
+                    "error_type": error_type,
+                    "strategy_length": len(strategy),
+                    "model": "qwen"
+                }
+            )
+            
+            return strategy.strip()
+            
+        except Exception as e:
+            logger.warning(
+                f"LLM strategy generation failed, using fallback",
+                extra={"error_type": error_type, "error": str(e)}
+            )
+            # 降级到预定义策略
+            strategies = {
+                "missing_content": "增强内容检测机制，确保所有必需内容都被生成",
+                "format_error": "加强格式验证，使用模板约束输出格式",
+                "constraint_violation": "改进约束提取和检查逻辑",
+                "spelling_error": "集成拼写检查工具，进行后处理校对",
+                "logic_error": "增强逻辑验证，使用本体知识图谱进行一致性检查"
         }
         
         return strategies.get(error_type, "建立质量控制检查点")

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import datetime
 from core.logger import logger
+from core.llm_router import get_llm_router, TaskType
 
 
 class DimensionType(str, Enum):
@@ -83,6 +84,8 @@ class ScoringEngine:
         logger.info("ScoringEngine initialized")
         self.scoring_history: List[ProposalScore] = []
         self.scoring_criteria = self._initialize_criteria()
+        self.llm_router = get_llm_router()  # 获取LLM路由器
+        logger.info("LLM Router integrated into ScoringEngine")
     
     def _initialize_criteria(self) -> List[ScoringCriteria]:
         """初始化评分标准"""
@@ -344,22 +347,53 @@ class ScoringEngine:
         criteria: ScoringCriteria,
         proposal_content: Dict
     ) -> float:
-        """评分单项标准"""
-        # 基于内容特征的简单评分逻辑
-        # 实际实现应使用 LLM 评估
+        """评分单项标准 - 使用LLM进行智能评分"""
         
-        content_quality = proposal_content.get("quality_score", 70)
-        relevance = proposal_content.get("relevance_score", 75)
-        completeness = proposal_content.get("completeness_score", 80)
-        
-        # 加权平均
-        score = (content_quality * 0.4 + relevance * 0.3 + completeness * 0.3)
-        
-        # 根据标准类型调整
+        # 如果是硬指标，直接检查
         if criteria.hard_metric:
-            score = min(100, score + 5)  # 硬指标倾向于给予高分
+            metric_key = f"metric_{criteria.criteria_id}"
+            if metric_key in proposal_content:
+                return 100.0 if proposal_content[metric_key] else 0.0
         
-        return min(criteria.max_score, score)
+        # 软指标使用LLM评分
+        try:
+            # 提取要评分的内容
+            content_to_score = proposal_content.get("content", "")
+            if not content_to_score:
+                content_to_score = str(proposal_content)
+            
+            # 使用千问进行评分（擅长分析和评估）
+            result = await self.llm_router.score_content(
+                content=content_to_score[:2000],  # 限制长度
+                criteria=f"{criteria.name}: {criteria.description}",
+                context=f"评分维度: {criteria.dimension.value}, 权重: {criteria.weight}"
+            )
+            
+            score = result["score"]
+            
+            logger.info(
+                f"LLM scored criteria {criteria.criteria_id}",
+                extra={
+                    "criteria": criteria.name,
+                    "score": score,
+                    "model": result["model"],
+                    "reasoning": result["reasoning"][:100]
+                }
+            )
+            
+            return min(criteria.max_score, score)
+            
+        except Exception as e:
+            logger.warning(
+                f"LLM scoring failed, using fallback",
+                extra={"criteria": criteria.criteria_id, "error": str(e)}
+            )
+            # 降级到简单评分
+            content_quality = proposal_content.get("quality_score", 70)
+            relevance = proposal_content.get("relevance_score", 75)
+            completeness = proposal_content.get("completeness_score", 80)
+            score = (content_quality * 0.4 + relevance * 0.3 + completeness * 0.3)
+            return min(criteria.max_score, score)
     
     async def _benchmark_analysis(
         self,
