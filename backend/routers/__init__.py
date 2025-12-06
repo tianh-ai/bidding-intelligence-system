@@ -1,4 +1,4 @@
 """路由模块"""
-from . import files, learning
+from . import files, learning, enhanced
 
-__all__ = ['files', 'learning']
+__all__ = ['files', 'learning', 'enhanced']

@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 导入路由
-from routers import files, learning
+from routers import files, learning, enhanced
 
 # 创建应用实例
 app = FastAPI(
@@ -32,6 +32,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(files.router, prefix="/api/files", tags=["文件管理"])
 app.include_router(learning.router, prefix="/api/learning", tags=["逻辑学习"])
+app.include_router(enhanced.router, prefix="/api", tags=["增强功能"])
 
 # 静态文件目录
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
