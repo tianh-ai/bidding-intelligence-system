@@ -56,21 +56,21 @@ class LLMRouter:
         """初始化路由器"""
         logger.info("Initializing LLM Router")
         
-        # 配置各个模型
+        # 配置各个模型（从配置文件读取）
         self.models = {
             "deepseek": ModelConfig(
                 name="DeepSeek",
-                api_key="sk-1fc432ea945d4c448f3699d674808167",
-                base_url="https://api.deepseek.com",
-                default_model="deepseek-chat",
+                api_key=settings.DEEPSEEK_API_KEY,
+                base_url=settings.DEEPSEEK_BASE_URL,
+                default_model=settings.DEEPSEEK_MODEL,
                 max_tokens=4000,
                 temperature=0.7  # 生成任务用更高的温度
             ),
             "qwen": ModelConfig(
                 name="通义千问",
-                api_key="sk-17745e25a6b74f4994de3b8b42341b57",
-                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                default_model="qwen-plus",
+                api_key=settings.QWEN_API_KEY,
+                base_url=settings.QWEN_BASE_URL,
+                default_model=settings.QWEN_MODEL,
                 max_tokens=4000,
                 temperature=0.3  # 分析任务用更低的温度
             )

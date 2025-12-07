@@ -6,7 +6,21 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ========== 基础表 ==========
 
--- 2. 文件表
+-- 2. 上传文件表（新增，用于文件管理页面）
+CREATE TABLE IF NOT EXISTS uploaded_files (
+    id uuid PRIMARY KEY,
+    filename text NOT NULL,
+    filetype text NOT NULL,
+    doc_type text NOT NULL DEFAULT 'other',
+    file_path text NOT NULL,
+    file_size bigint DEFAULT 0,
+    created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_doc_type ON uploaded_files(doc_type);
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_created_at ON uploaded_files(created_at DESC);
+
+-- 3. 文件表（原有，用于解析后的文件）
 CREATE TABLE IF NOT EXISTS files (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     filename text NOT NULL,
@@ -22,7 +36,7 @@ CREATE TABLE IF NOT EXISTS files (
 CREATE INDEX IF NOT EXISTS idx_files_doc_type ON files(doc_type);
 CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at DESC);
 
--- 3. 章节表
+-- 4. 章节表
 CREATE TABLE IF NOT EXISTS chapters (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     file_id uuid NOT NULL REFERENCES files(id) ON DELETE CASCADE,

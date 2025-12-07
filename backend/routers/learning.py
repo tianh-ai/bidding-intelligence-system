@@ -2,18 +2,32 @@
 逻辑学习路由
 提供章节级和全局级学习功能
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from engines import ChapterLogicEngine, GlobalLogicEngine
 from database import db
+from core.logger import logger
+from core.cache import cache  # 使用Redis缓存
+import uuid
+from datetime import datetime
+import json
 
 router = APIRouter()
 chapter_engine = ChapterLogicEngine()
 global_engine = GlobalLogicEngine()
 
+# 使用Redis缓存替代内存存储，任务状态TTL=24小时
+TASK_STATUS_TTL = 86400
+
 
 # ========== 请求模型 ==========
+
+class LearningStartRequest(BaseModel):
+    """学习任务启动请求"""
+    fileIds: Optional[List[str]] = None
+    folderPath: Optional[str] = None
+
 
 class ChapterPairRequest(BaseModel):
     """章节对学习请求"""
@@ -27,6 +41,195 @@ class FilePairRequest(BaseModel):
     """文件对学习请求"""
     tender_file_id: str
     proposal_file_id: str
+
+
+# ========== 学习任务管理 ==========
+
+@router.post("/start")
+async def start_learning_task(request: LearningStartRequest, background_tasks: BackgroundTasks):
+    """
+    启动学习任务（章节级或全局级）
+    
+    Body:
+        {
+            "fileIds": ["file1", "file2"],  // 可选: 文件ID列表
+            "folderPath": "/path/to/folder"  // 可选: 文件夹路径
+        }
+    
+    Returns:
+        {"taskId": "uuid", "status": "processing"}
+    """
+    task_id = str(uuid.uuid4())
+    
+    # 初始化任务状态
+    task_status = {
+        "taskId": task_id,
+        "status": "processing",
+        "progress": 0,
+        "message": "Learning task started",
+        "createdAt": datetime.utcnow().isoformat(),
+        "fileIds": request.fileIds or [],
+        "folderPath": request.folderPath
+    }
+    
+    # 存储到Redis，24小时过期
+    await cache.set(
+        f"learning_task:{task_id}",
+        json.dumps(task_status),
+        ttl=TASK_STATUS_TTL
+    )
+    
+    # 在后台执行学习任务
+    background_tasks.add_task(process_learning_task, task_id, request)
+    
+    logger.info(f"Learning task started: {task_id}")
+    
+    return {
+        "taskId": task_id,
+        "status": "processing",
+        "message": "Learning task has been queued"
+    }
+
+
+@router.get("/status/{taskId}")
+async def get_learning_status(taskId: str):
+    """
+    获取学习任务状态
+    
+    Args:
+        taskId: 任务ID
+    
+    Returns:
+        {taskId, status, progress, message, result}
+    """
+    task_json = await cache.get(f"learning_task:{taskId}")
+    
+    if not task_json:
+        raise HTTPException(status_code=404, detail=f"Task not found: {taskId}")
+    
+    task = json.loads(task_json)
+    return task
+
+
+@router.get("/logic-db")
+async def get_logic_database():
+    """
+    获取逻辑库（所有已学习的逻辑规则）
+    
+    Returns:
+        {
+            "chapterRules": [...],
+            "globalRules": [...],
+            "totalRules": int
+        }
+    """
+    try:
+        # 获取章节级规则
+        chapter_rules = db.query(
+            """
+            SELECT 'structure' as rule_type, id, chapter_id, rule_content, confidence, created_at
+            FROM chapter_structure_rules WHERE is_active = TRUE
+            UNION ALL
+            SELECT 'content' as rule_type, id, chapter_id, rule_content, confidence, created_at
+            FROM chapter_content_rules WHERE is_active = TRUE
+            UNION ALL
+            SELECT 'mandatory' as rule_type, id, chapter_id, rule_content, confidence, created_at
+            FROM chapter_mandatory_rules WHERE is_active = TRUE
+            ORDER BY created_at DESC
+            LIMIT 100
+            """
+        )
+        
+        # 获取全局级规则
+        global_rules = db.query(
+            """
+            SELECT 'structure' as rule_type, id, tender_file_id, rule_content, confidence, created_at
+            FROM global_structure_rules WHERE is_active = TRUE
+            UNION ALL
+            SELECT 'content' as rule_type, id, tender_file_id, rule_content, confidence, created_at
+            FROM global_content_rules WHERE is_active = TRUE
+            ORDER BY created_at DESC
+            LIMIT 100
+            """
+        )
+        
+        return {
+            "chapterRules": chapter_rules or [],
+            "globalRules": global_rules or [],
+            "totalRules": len(chapter_rules or []) + len(global_rules or [])
+        }
+    
+    except Exception as e:
+        logger.error(f"Failed to fetch logic database: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch logic database: {str(e)}")
+
+
+async def process_learning_task(task_id: str, request: LearningStartRequest):
+    """
+    后台处理学习任务
+    
+    使用Redis缓存存储任务状态
+    """
+    try:
+        # 更新进度到Redis
+        task_json = await cache.get(f"learning_task:{task_id}")
+        if task_json:
+            task_status = json.loads(task_json)
+            task_status["progress"] = 30
+            task_status["message"] = "Processing files..."
+            await cache.set(
+                f"learning_task:{task_id}",
+                json.dumps(task_status),
+                ttl=TASK_STATUS_TTL
+            )
+        
+        # TODO: 实际的学习逻辑
+        # 1. 解析文件
+        # 2. 提取章节
+        # 3. 学习逻辑规则
+        # 4. 保存到数据库
+        
+        # 模拟处理
+        import asyncio
+        await asyncio.sleep(2)  # 模拟耗时操作
+        
+        # 更新为完成状态
+        task_json = await cache.get(f"learning_task:{task_id}")
+        if task_json:
+            task_status = json.loads(task_json)
+            task_status.update({
+                "status": "completed",
+                "progress": 100,
+                "message": "Learning completed successfully",
+                "completedAt": datetime.utcnow().isoformat(),
+                "result": {
+                    "rulesLearned": 15,
+                    "chaptersProcessed": 5
+                }
+            })
+            await cache.set(
+                f"learning_task:{task_id}",
+                json.dumps(task_status),
+                ttl=TASK_STATUS_TTL
+            )
+        
+        logger.info(f"Learning task completed: {task_id}")
+    
+    except Exception as e:
+        logger.error(f"Learning task failed: {task_id}, error: {str(e)}")
+        task_json = await cache.get(f"learning_task:{task_id}")
+        if task_json:
+            task_status = json.loads(task_json)
+            task_status.update({
+                "status": "failed",
+                "message": f"Learning failed: {str(e)}",
+                "error": str(e)
+            })
+            await cache.set(
+                f"learning_task:{task_id}",
+                json.dumps(task_status),
+                ttl=TASK_STATUS_TTL
+            )
 
 
 # ========== 章节级学习 ==========

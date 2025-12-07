@@ -240,76 +240,80 @@ class LogicLearningEngine:
         Returns:
             生成规则
         """
-        prompt = f"""
-分析以下招标需求和对应的投标响应，提取生成规则：
+        try:
+            # 提取投标章节的响应内容
+            proposal_content = proposal_chapter.content[:500] if hasattr(proposal_chapter, 'content') else ""
+            proposal_key_points = getattr(proposal_chapter, 'key_points', [])[:5]
+            
+            prompt = f"""
+分析以下招标需求和对应的投标响应，提取可复用的生成规则。
 
-招标需求：
+【招标需求】
 {requirement}
 
-招标章节关键点：
-{', '.join(tender_chapter.key_points[:5])}
+【招标章节关键点】
+{', '.join(tender_chapter.key_points[:5]) if hasattr(tender_chapter, 'key_points') else '无'}
 
-投标响应（章节 {proposal_chapter.chapter_id}）：
-{proposal_chapter.summary}
+【投标响应内容】
+{proposal_content}
 
-投标关键点：
-{', '.join(proposal_chapter.key_points[:5])}
+【投标关键点】
+{', '.join(proposal_key_points)}
 
-请以JSON格式返回生成规则：
+请提取生成规则，返回JSON格式：
 {{
-  "trigger_pattern": "需求的特征模式（如：性能要求，CPU相关）",
-  "generation_strategy": "direct_match / enhanced_response / creative",
-  "response_template": "响应模板，用{{placeholder}}标记可替换部分",
-  "constraints": ["约束1", "约束2"],
-  "confidence": 置信度(0-100)
+  "trigger_pattern": "触发此规则的需求模式",
+  "generation_strategy": "direct_match 或 enhanced_response 或 creative",
+  "response_template": "响应模板（使用{{requirement}}等占位符）",
+  "constraints": ["必须满足的约束1", "约束2"],
+  "confidence": 0-100的置信度分数
 }}
-
-注意：
-1. 提取可复用的模式，不要过度具体化
-2. 响应模板要足够灵活
-3. 返回纯JSON
 """
-        
-        try:
-            result = await self.llm_router.generate_text(
+            
+            response = await self.llm_router.generate_text(
                 prompt=prompt,
-                system_prompt="你是招投标逻辑学习专家，擅长提取可复用的生成规则。",
-                task_type=TaskType.ANALYSIS,
-                max_tokens=1000
+                system_prompt="你是一位标书专家，擅长从成功案例中提取可复用的响应模式。",
+                task_type=TaskType.LOGIC_LEARNING,
+                temperature=0.3,
+                max_tokens=800
             )
             
-            # 解析JSON
-            result = result.strip()
-            if result.startswith("```"):
-                result = result.split("```")[1]
-                if result.startswith("json"):
-                    result = result[4:]
+            # 解析LLM返回的JSON
+            import json
+            import re
             
-            data = json.loads(result)
+            # 尝试提取JSON
+            json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+            if not json_match:
+                logger.warning(f"Failed to extract JSON from LLM response for {rule_id}")
+                return None
             
+            rule_data = json.loads(json_match.group())
+            
+            # 创建生成规则
             rule = GenerationRule(
                 rule_id=rule_id,
                 trigger_type="requirement",
-                trigger_pattern=data.get("trigger_pattern", requirement),
-                generation_strategy=data.get("generation_strategy", "direct_match"),
-                response_template=data.get("response_template", ""),
+                trigger_pattern=rule_data.get('trigger_pattern', requirement[:100]),
+                generation_strategy=rule_data.get('generation_strategy', 'enhanced_response'),
+                response_template=rule_data.get('response_template', '根据招标要求提供详细响应'),
                 examples=[{
                     "input": requirement,
-                    "output": proposal_chapter.summary
+                    "output": proposal_content[:200]
                 }],
-                constraints=data.get("constraints", []),
-                success_rate=100,  # 初始假设100%
-                confidence=data.get("confidence", 80),
+                constraints=rule_data.get('constraints', []),
+                success_rate=85.0,
+                confidence=float(rule_data.get('confidence', 75)),
                 learned_from=[pair_id],
                 created_time=datetime.now().isoformat(),
                 last_updated=datetime.now().isoformat(),
                 usage_count=0
             )
             
+            logger.info(f"Learned requirement response rule: {rule_id}")
             return rule
-            
         except Exception as e:
-            logger.warning(f"Failed to learn requirement response: {e}")
+            logger.error(f"Error learning requirement response: {e}")
             return None
     
     async def _learn_technical_response(
@@ -321,6 +325,72 @@ class LogicLearningEngine:
         pair_id: str
     ) -> Optional[GenerationRule]:
         """学习技术规格响应规则"""
+        try:
+            spec_name = tech_spec.get('item', '技术规格')
+            spec_value = tech_spec.get('spec', '')
+            
+            # 从投标章节中查找对应的技术响应
+            proposal_content = proposal_chapter.content[:500] if hasattr(proposal_chapter, 'content') else ""
+            
+            prompt = f"""
+分析技术规格要求及其投标响应，提取生成规则。
+
+【技术规格要求】
+项目: {spec_name}
+规格: {spec_value}
+
+【投标响应】
+{proposal_content}
+
+请提取技术响应规则，返回JSON：
+{{
+  "trigger_pattern": "触发模式",
+  "generation_strategy": "direct_match/enhanced_response/creative",
+  "response_template": "技术响应模板",
+  "constraints": ["技术约束"],
+  "confidence": 0-100
+}}
+"""
+            
+            response = await self.llm_router.generate_text(
+                prompt=prompt,
+                system_prompt="你是技术规格分析专家。",
+                task_type=TaskType.LOGIC_LEARNING,
+                temperature=0.3
+            )
+            
+            import json, re
+            json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+            if not json_match:
+                return None
+            
+            rule_data = json.loads(json_match.group())
+            
+            rule = GenerationRule(
+                rule_id=rule_id,
+                trigger_type="technical",
+                trigger_pattern=rule_data.get('trigger_pattern', f"{spec_name}: {spec_value}"),
+                generation_strategy=rule_data.get('generation_strategy', 'direct_match'),
+                response_template=rule_data.get('response_template', f"满足{spec_name}要求: {spec_value}"),
+                examples=[{
+                    "input": f"{spec_name}: {spec_value}",
+                    "output": proposal_content[:200]
+                }],
+                constraints=rule_data.get('constraints', [f"必须满足{spec_value}"]),
+                success_rate=90.0,
+                confidence=float(rule_data.get('confidence', 80)),
+                learned_from=[pair_id],
+                created_time=datetime.now().isoformat(),
+                last_updated=datetime.now().isoformat(),
+                usage_count=0
+            )
+            
+            logger.info(f"Learned technical response rule: {rule_id}")
+            return rule
+            
+        except Exception as e:
+            logger.error(f"Error learning technical response: {e}")
+            return None
         # 找到投标文档中对应的技术规格
         matching_spec = None
         for p_spec in proposal_chapter.technical_specs:

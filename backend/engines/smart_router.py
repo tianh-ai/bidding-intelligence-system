@@ -94,9 +94,27 @@ class SmartRouter:
         self.db = db_connection
         self.openai_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         
-        # 阈值配置
+        # 阈值配置（可动态调整）
         self.KB_THRESHOLD = 0.8      # KB精确匹配阈值
         self.ADAPT_THRESHOLD = 0.5   # LLM微调阈值
+    
+    def update_thresholds(self, kb_threshold: Optional[float] = None, adapt_threshold: Optional[float] = None):
+        """
+        更新路由阈值（用于反馈闭环优化）
+        
+        Args:
+            kb_threshold: 新的KB匹配阈值
+            adapt_threshold: 新的LLM微调阈值
+        """
+        if kb_threshold is not None:
+            old_kb = self.KB_THRESHOLD
+            self.KB_THRESHOLD = max(0.5, min(0.95, kb_threshold))  # 限制在0.5-0.95
+            logger.info(f"SmartRouter threshold updated: KB {old_kb:.2f} -> {self.KB_THRESHOLD:.2f}")
+        
+        if adapt_threshold is not None:
+            old_adapt = self.ADAPT_THRESHOLD
+            self.ADAPT_THRESHOLD = max(0.3, min(0.7, adapt_threshold))  # 限制在0.3-0.7
+            logger.info(f"SmartRouter threshold updated: ADAPT {old_adapt:.2f} -> {self.ADAPT_THRESHOLD:.2f}")
         
         # 成本配置（美元/1000 tokens）
         self.COST_PER_1K_TOKENS = 0.03

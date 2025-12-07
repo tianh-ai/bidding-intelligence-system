@@ -10,12 +10,12 @@ from pathlib import Path
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from backend.core.logger import logger
-from backend.db.ontology import OntologyManager, OntologyNode, OntologyRelation, NodeType, RelationType
-from backend.agents.preprocessor import PreprocessorAgent, RequirementNode
-from backend.agents.constraint_extractor import ConstraintExtractorAgent
-from backend.engines.smart_router import SmartRouter
-from backend.engines.multi_agent_evaluator import MultiAgentEvaluator
+from core.logger import logger
+from db.ontology import OntologyManager, OntologyNode, OntologyRelation, NodeType, RelationType
+from agents.preprocessor import PreprocessorAgent, RequirementNode
+from agents.constraint_extractor import ConstraintExtractorAgent
+from engines.smart_router import SmartRouter
+from engines.multi_agent_evaluator import MultiAgentEvaluator
 
 
 class MockDBConnection:

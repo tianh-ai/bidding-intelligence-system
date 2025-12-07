@@ -1,0 +1,58 @@
+Deep check started at: 2025年12月 7日 星期日 19时40分56秒 CST
+\n-- Docker containers --
+NAMES              IMAGE                                  STATUS                 PORTS
+bidding_frontend   bidding-intelligence-system-frontend   Up About an hour       0.0.0.0:5173->5173/tcp, [::]:5173->5173/tcp
+bidding_backend    bidding-intelligence-system-backend    Up About an hour       0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+bidding_redis      redis:7-alpine                         Up 4 hours (healthy)   0.0.0.0:6380->6379/tcp, [::]:6380->6379/tcp
+bidding_postgres   pgvector/pgvector:pg15                 Up 4 hours (healthy)   0.0.0.0:5433->5432/tcp, [::]:5433->5432/tcp
+\n-- Ports (8000 backend, 5173 frontend) --
+\n-- Backend health check --
+\n-- Vite dev server check --
+COMMAND     PID    USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+com.docke  8620 haitian  239u  IPv6 0xdf703c732c97644e      0t0  TCP localhost:5173->localhost:58146 (ESTABLISHED)
+com.docke  8620 haitian  240u  IPv6 0xfd64f81a30a6666e      0t0  TCP localhost:5173->localhost:58147 (ESTABLISHED)
+com.docke  8620 haitian  275u  IPv6 0x6b9a96b6ab255aac      0t0  TCP *:5173 (LISTEN)
+com.docke  8620 haitian  286u  IPv6 0xac47b519c1b55f68      0t0  TCP localhost:5173->localhost:58158 (ESTABLISHED)
+ChatGPT   44800 haitian   33u  IPv6 0x181eb3d2373f93df      0t0  TCP localhost:58146->localhost:5173 (ESTABLISHED)
+ChatGPT   44800 haitian   48u  IPv6 0x9910c4d72d7a7d0e      0t0  TCP localhost:58158->localhost:5173 (ESTABLISHED)
+Google    66155 haitian   30u  IPv6 0xe72019b9707ce3b4      0t0  TCP localhost:58147->localhost:5173 (ESTABLISHED)
+\n-- Node modules check (frontend) --
+329M	frontend/node_modules
+\n-- Database tables quick check --
+[?1049h[22;0;0t[?1h=              List of relations
+ Schema |       Name       | Type  |  Owner   
+--------+------------------+-------+----------
+ public | chapters         | table | postgres
+ public | files            | table | postgres
+ public | llm_models       | table | postgres
+ public | logic_rules      | table | postgres
+ public | prompt_templates | table | postgres
+ public | uploaded_files   | table | postgres
+ public | users            | table | postgres
+(7 rows)
+
+[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K...skipping...
+              List of relations
+ Schema |       Name       | Type  |  Owner   
+--------+------------------+-------+----------
+ public | chapters         | table | postgres
+ public | files            | table | postgres
+ public | llm_models       | table | postgres
+ public | logic_rules      | table | postgres
+ public | prompt_templates | table | postgres
+ public | uploaded_files   | table | postgres
+ public | users            | table | postgres
+(7 rows)
+
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[1m~[0m
+[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KAA[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K[K [KESCESC[KOO[KBB[K[K[7m(END)[27m[K

@@ -1,0 +1,136 @@
+services:
+  # PostgreSQL 数据库 with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: bidding_postgres
+    restart: unless-stopped  # 自动重启
+    environment:
+      POSTGRES_DB: bidding_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5433:5432"  # 避免与本地 PostgreSQL 冲突
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init_database.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bidding_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: bidding_redis
+    restart: unless-stopped  # 自动重启
+    ports:
+      - "6380:6379"  # 避免与本地 Redis 冲突
+    volumes:
+      - redis_data:/data
+    networks:
+      - bidding_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 后端 API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bidding_backend
+    restart: unless-stopped  # 自动重启
+    environment:
+      # 数据库配置
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres123
+      DB_NAME: bidding_db
+      
+      # Redis 配置
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # DeepSeek & Qwen 配置
+      DEEPSEEK_API_KEY: sk-1fc432ea945d4c448f3699d674808167
+      DEEPSEEK_BASE_URL: https://api.deepseek.com
+      DEEPSEEK_MODEL: deepseek-chat
+      
+      QWEN_API_KEY: sk-17745e25a6b74f4994de3b8b42341b57
+      QWEN_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+      QWEN_MODEL: qwen-plus
+      
+      # 应用配置
+      PORT: 8000
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"  # 统一使用 8000 端口
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bidding_network
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bidding_celery_worker
+    command: celery -A worker worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres123@postgres:5432/bidding_db
+      SYNC_DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/bidding_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-your-openai-key}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-your-deepseek-key}
+      QWEN_API_KEY: ${QWEN_API_KEY:-your-qwen-key}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bidding_network
+
+  # 前端
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bidding_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"  # Vite 默认端口
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - bidding_network
+
+networks:
+  bidding_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

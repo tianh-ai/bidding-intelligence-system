@@ -64,27 +64,27 @@ class ParsedDocument:
 class KnowledgeEntry:
     """知识库条目"""
     entry_id: str
-    
+
     # 来源信息
     source_doc_type: str  # "tender" or "proposal"
     source_chapter_id: str
-    
+
     # 知识内容
     content_type: str  # "requirement", "technical", "business", "evaluation"
     content: str  # 文本内容
     structured_data: Dict[str, Any]  # 结构化数据
-    
+
     # 关联关系
     related_entries: List[str]  # 关联的其他条目ID
-    
-    # 向量表示
-    embedding: Optional[List[float]] = None
-    
-    # 元数据
+
+    # 元数据（无默认值字段必须在前）
     keywords: List[str]
     importance_score: float  # 0-100
     created_time: str
-    
+
+    # 向量表示（有默认值的字段放最后）
+    embedding: Optional[List[float]] = None
+
     def __post_init__(self):
         if not self.created_time:
             self.created_time = datetime.now().isoformat()

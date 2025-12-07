@@ -17,11 +17,6 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api"
     DEBUG: bool = False
     
-    # ========== Server Settings ==========
-    HOST: str = "0.0.0.0"
-    PORT: int = 8001
-    RELOAD: bool = False
-    
     # ========== Database Settings ==========
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
@@ -33,7 +28,11 @@ class Settings(BaseSettings):
     
     @property
     def database_url(self) -> str:
-        """Construct async database URL."""
+        """Construct async database URL.
+        
+        Supports both Docker (postgres:5432) and local (localhost:5433) environments.
+        Use DB_HOST and DB_PORT environment variables to configure.
+        """
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
     @property
@@ -79,10 +78,36 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = None
     ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
     
+    # DeepSeek Configuration
+    DEEPSEEK_API_KEY: str = "sk-1fc432ea945d4c448f3699d674808167"
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    
+    # Qwen Configuration
+    QWEN_API_KEY: str = "sk-17745e25a6b74f4994de3b8b42341b57"
+    QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    QWEN_MODEL: str = "qwen-plus"
+    
     # ========== File Upload Settings ==========
-    UPLOAD_DIR: str = "uploads"
+    UPLOAD_DIR: str = "./uploads"  # 支持相对路径或绝对路径（如/data/uploads）
     MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
-    ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".doc"]
+    ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".txt"]
+    
+    @property
+    def upload_path(self) -> str:
+        """获取上传目录的绝对路径，自动创建目录"""
+        import os
+        # 如果是相对路径，相对于项目根目录
+        if not os.path.isabs(self.UPLOAD_DIR):
+            # 获取项目根目录（backend目录的父目录）
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            upload_path = os.path.join(base_dir, self.UPLOAD_DIR)
+        else:
+            upload_path = self.UPLOAD_DIR
+        
+        # 自动创建目录
+        os.makedirs(upload_path, exist_ok=True)
+        return upload_path
     
     # ========== Cache Settings ==========
     CACHE_ENABLED: bool = True
@@ -98,7 +123,9 @@ class Settings(BaseSettings):
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # ========== CORS Settings ==========
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
+    PORT: int = 8000  # API server port (must match .env PORT and frontend proxy)
+    HOST: str = "0.0.0.0"  # API server host
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: list[str] = ["*"]
     CORS_ALLOW_HEADERS: list[str] = ["*"]

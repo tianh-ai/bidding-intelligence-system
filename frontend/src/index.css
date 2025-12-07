@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* react-split 样式 */
+.gutter {
+  background-color: #1f1f1f;
+  background-repeat: no-repeat;
+  background-position: 50%;
+  cursor: col-resize;
+}
+
+.gutter:hover {
+  background-color: #2a2a2a;
+}
+
+.gutter.gutter-horizontal {
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+}
+
+.gutter.gutter-vertical {
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFCAYAAABSZcN5AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAANSURBVBiVY/j//z8DAAj8Av6Fzas0AAAAAElFTkSuQmCC');
+  cursor: row-resize;
+}
+
+/* Grok 风格全局样式 */
+@layer base {
+  * {
+    @apply border-grok-border;
+  }
+
+  body {
+    @apply bg-grok-bg text-grok-text font-sans antialiased;
+  }
+
+  /* 滚动条样式 */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-grok-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-grok-border rounded-full hover:bg-gray-600;
+  }
+}
+
+@layer components {
+  /* Grok 风格卡片 */
+  .grok-card {
+    @apply bg-grok-surface border border-grok-border rounded-lg p-6;
+  }
+
+  /* Grok 风格按钮 */
+  .grok-btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .grok-btn-primary {
+    @apply grok-btn bg-grok-accent text-grok-bg hover:bg-grok-accentHover;
+  }
+
+  .grok-btn-secondary {
+    @apply grok-btn bg-grok-surface border border-grok-border hover:bg-gray-800;
+  }
+
+  /* Grok 风格输入框 */
+  .grok-input {
+    @apply bg-grok-surface border border-grok-border rounded-lg px-4 py-2 
+           text-grok-text placeholder-grok-textMuted
+           focus:outline-none focus:border-grok-accent transition-colors;
+  }
+
+  /* 代码块样式 */
+  .grok-code {
+    @apply bg-grok-bg border border-grok-border rounded-lg p-4 
+           font-mono text-sm overflow-x-auto;
+  }
+}
+
+/* Ant Design 暗色主题覆盖 */
+.ant-layout {
+  background: #0A0A0A !important;
+}
+
+.ant-menu-dark {
+  background: #111111 !important;
+}
+
+.ant-menu-dark .ant-menu-item-selected {
+  background: #00D9FF20 !important;
+  color: #00D9FF !important;
+}
+
+.ant-table {
+  background: #111111 !important;
+  color: #E5E5E5 !important;
+}
+
+.ant-table-thead > tr > th {
+  background: #1A1A1A !important;
+  color: #E5E5E5 !important;
+  border-bottom: 1px solid #2A2A2A !important;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid #2A2A2A !important;
+}
+
+.ant-modal-content {
+  background: #111111 !important;
+}
+
+.ant-input,
+.ant-input-password,
+.ant-select-selector {
+  background: #0A0A0A !important;
+  border-color: #2A2A2A !important;
+  color: #E5E5E5 !important;
+}
+
+.ant-btn-primary {
+  background: #00D9FF !important;
+  border-color: #00D9FF !important;
+  color: #0A0A0A !important;
+}
+
+.ant-btn-primary:hover {
+  background: #00B8D4 !important;
+  border-color: #00B8D4 !important;
+}
