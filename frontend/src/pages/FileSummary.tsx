@@ -4,8 +4,6 @@ import { FileTextOutlined, LinkOutlined, FolderOutlined } from '@ant-design/icon
 import { summaryAPI } from '@/services/api'
 import ReactMarkdown from 'react-markdown'
 
-const { TextArea } = Input
-
 const FileSummary: React.FC = () => {
   const [activeTab, setActiveTab] = useState('link')
   const [linkInput, setLinkInput] = useState('')

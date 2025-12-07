@@ -12,10 +12,8 @@ import LLMManagement from './pages/LLMManagement'
 import PromptManagement from './pages/PromptManagement'
 import Settings from './pages/Settings'
 import FileManagement from './pages/FileManagement'
-import { useAuthStore } from './store/authStore'
 
 function App() {
-  const { isAuthenticated } = useAuthStore()
 
   return (
     <ConfigProvider

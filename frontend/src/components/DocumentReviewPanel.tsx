@@ -133,20 +133,32 @@ const EntityCard: React.FC<EntityCardProps> = ({ entity, onUpdate }) => {
 
   // 4. 高亮显示上下文中的实体
   const renderHighlightedContext = () => {
-    if (!entity.context || !entity.text) return `"${entity.context}"`;
-    const parts = entity.context.split(new RegExp(`(${entity.text})`, 'gi'));
+    const hasContext = entity.context && entity.text
+    if (!hasContext) {
+      return (
+        <span className="text-xs text-gray-500 italic">
+          &ldquo;{entity.context || '暂无上下文'}&rdquo;
+        </span>
+      )
+    }
+
+    const parts = entity.context.split(new RegExp(`(${entity.text})`, 'gi'))
     return (
       <span className="text-xs text-gray-500 italic">
-        "{parts.map((part, i) =>
+        &ldquo;
+        {parts.map((part, i) =>
           part.toLowerCase() === entity.text.toLowerCase() ? (
-            <mark key={i} className="bg-yellow-200 text-black px-1 rounded">{part}</mark>
+            <mark key={i} className="bg-yellow-200 text-black px-1 rounded">
+              {part}
+            </mark>
           ) : (
             part
           )
-        )}"
+        )}
+        &rdquo;
       </span>
-    );
-  };
+    )
+  }
 
   if (isEditing) {
     return <EntityEditor initialData={entity} onSave={handleSaveEdit} onCancel={() => setIsEditing(false)} />;

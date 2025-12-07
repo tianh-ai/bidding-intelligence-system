@@ -21,7 +21,6 @@ import {
   ExperimentOutlined,
 } from '@ant-design/icons'
 import { llmAPI } from '@/services/api'
-import { useAuthStore } from '@/store/authStore'
 import type { LLMModel } from '@/types'
 
 const LLMManagement: React.FC = () => {
@@ -30,9 +29,6 @@ const LLMManagement: React.FC = () => {
   const [editingModel, setEditingModel] = useState<any | null>(null)
   const [testingModel, setTestingModel] = useState<string | null>(null)
   const [form] = Form.useForm()
-  const { user } = useAuthStore()
-
-  const canManage = user?.role === 'admin'
 
   useEffect(() => {
     loadModels()

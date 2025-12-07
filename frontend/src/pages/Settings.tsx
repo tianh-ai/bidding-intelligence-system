@@ -1,13 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Card, Form, Input, Button, message, Space, Statistic, Row, Col, Tag, Alert, InputNumber } from 'antd'
 import { FolderOutlined, SaveOutlined, ReloadOutlined, CheckCircleOutlined, WarningOutlined } from '@ant-design/icons'
 import { settingsAPI } from '@/services/api'
-
-interface UploadSettings {
-  upload_dir: string
-  max_file_size: number
-  allowed_extensions: string[]
-}
 
 interface PathInfo {
   configured_path: string
@@ -36,7 +30,7 @@ const Settings: React.FC = () => {
   const [testResult, setTestResult] = useState<any>(null)
 
   // 加载当前设置
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const response = await settingsAPI.getUploadSettings()
       const settings = response.data
@@ -49,10 +43,10 @@ const Settings: React.FC = () => {
       console.error('Load settings error:', error)
       message.error('加载设置失败: ' + (error.response?.data?.detail || error.message))
     }
-  }
+  }, [form])
 
   // 加载路径信息
-  const loadPathInfo = async () => {
+  const loadPathInfo = useCallback(async () => {
     try {
       const response = await settingsAPI.getUploadPathInfo()
       const info = response.data
@@ -61,12 +55,12 @@ const Settings: React.FC = () => {
       console.error('Failed to load path info:', error)
       message.error('加载路径信息失败: ' + (error.response?.data?.detail || error.message))
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadSettings()
     loadPathInfo()
-  }, [])
+  }, [loadSettings, loadPathInfo])
 
   // 测试路径
   const handleTestPath = async () => {

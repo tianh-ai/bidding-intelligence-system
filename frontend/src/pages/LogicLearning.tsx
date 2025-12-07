@@ -18,7 +18,6 @@ import {
   PlayCircleOutlined,
   SaveOutlined,
   FileTextOutlined,
-  CheckCircleOutlined,
   ExclamationCircleOutlined,
   DeleteOutlined,
   EyeOutlined,

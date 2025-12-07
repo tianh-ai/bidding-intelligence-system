@@ -76,6 +76,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({ message, usernameI
   )
 })
 
+MessageItem.displayName = 'MessageItem'
+
 const AIChatPanel: React.FC = () => {
   const [input, setInput] = useState('')
   const [models, setModels] = useState<{ id: string; name: string }[]>([])
@@ -114,7 +116,7 @@ const AIChatPanel: React.FC = () => {
         console.log('[AIChatPanel] 解析后的模型列表:', data)
         setModels(data)
         
-        if (!currentModel && data.length > 0) {
+          if (!currentModel && data.length > 0) {
           const defaultModel = data.find((m) => m.is_default) || data[0]
           console.log('[AIChatPanel] 设置默认模型:', defaultModel)
           setCurrentModel(defaultModel)
@@ -130,8 +132,8 @@ const AIChatPanel: React.FC = () => {
       }
     }
 
-    fetchModels()
-  }, [setCurrentModel])
+      fetchModels()
+    }, [currentModel, setCurrentModel])
 
   // 加载提示词模板
   useEffect(() => {
@@ -437,5 +439,7 @@ const AIChatPanel: React.FC = () => {
     </div>
   )
 }
+
+AIChatPanel.displayName = 'AIChatPanel'
 
 export default AIChatPanel
