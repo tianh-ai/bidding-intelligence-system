@@ -7,6 +7,9 @@ import {
   CheckCircleOutlined,
   FileTextOutlined,
 } from '@ant-design/icons'
+import Split from 'react-split'
+import AIChatPanel from '@/components/AIChatPanel'
+import { useChatStore } from '@/store/chatStore'
 
 import { apiClient } from '@/services/api'
 
@@ -20,6 +23,7 @@ interface DashboardStats {
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(false)
+  const { isOpen: isChatOpen } = useChatStore()
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -44,7 +48,18 @@ const Dashboard: React.FC = () => {
   const successRate = stats?.success_rate ?? 96.5
 
   return (
-    <div className="space-y-6">
+    <Split
+      className="flex h-full overflow-hidden"
+      sizes={isChatOpen ? [70, 30] : [100, 0]}
+      minSize={isChatOpen ? [300, 280] : [100, 0]}
+      maxSize={isChatOpen ? [Infinity, 600] : [Infinity, 0]}
+      gutterSize={isChatOpen ? 8 : 0}
+      snapOffset={30}
+      dragInterval={1}
+      direction="horizontal"
+      cursor="col-resize"
+    >
+      <div className="space-y-6 overflow-auto pr-4">
       <div>
         <h1 className="text-3xl font-bold text-grok-text mb-2">欢迎使用投标智能系统</h1>
         <p className="text-grok-textMuted">
@@ -148,7 +163,14 @@ const Dashboard: React.FC = () => {
           ))}
         </div>
       </Card>
-    </div>
+      </div>
+
+      {isChatOpen && (
+        <div className="h-full overflow-hidden">
+          <AIChatPanel />
+        </div>
+      )}
+    </Split>
   )
 }
 

@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider, theme } from 'antd'
+import { ConfigProvider, theme, App as AntdApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import MainLayout from './layouts/MainLayout'
 import Login from './pages/Login'
@@ -32,27 +32,29 @@ function App() {
         },
       }}
     >
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="files" element={<FileUpload />} />
-            <Route path="learning" element={<LogicLearning />} />
-            <Route path="summary" element={<FileSummary />} />
-            <Route path="llm" element={<LLMManagement />} />
-            <Route path="prompts" element={<PromptManagement />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="management" element={<FileManagement />} />
+      <AntdApp>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
             
-            {/* Placeholder routes for other pages */}
-            <Route path="generation" element={<div className="text-grok-text">标书生成（开发中）</div>} />
-          </Route>
+            <Route path="/" element={<MainLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="files" element={<FileUpload />} />
+              <Route path="learning" element={<LogicLearning />} />
+              <Route path="summary" element={<FileSummary />} />
+              <Route path="llm" element={<LLMManagement />} />
+              <Route path="prompts" element={<PromptManagement />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="management" element={<FileManagement />} />
+              
+              {/* Placeholder routes for other pages */}
+              <Route path="generation" element={<div className="text-grok-text">标书生成（开发中）</div>} />
+            </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AntdApp>
     </ConfigProvider>
   )
 }

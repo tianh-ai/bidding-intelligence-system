@@ -36,7 +36,6 @@ export const fileAPI = {
   // 上传文件
   uploadFiles: (files: FormData, onProgress?: (progress: number) => void) =>
     axiosInstance.post('/api/files/upload', files, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
@@ -56,6 +55,22 @@ export const fileAPI = {
   // 下载文件（使用uploaded_files表）
   downloadFile: (id: string) =>
     axiosInstance.get(`/api/files/uploaded/${id}/download`, { responseType: 'blob' }),
+
+  // 获取数据库详情
+  getDatabaseDetails: () =>
+    axiosInstance.get('/api/files/database-details'),
+
+  // 获取知识库条目
+  getKnowledgeBaseEntries: () =>
+    axiosInstance.get('/api/files/knowledge-base-entries'),
+
+  // 处理上传的文件（生成知识库和文档索引）
+  processFiles: (fileIds: string[]) =>
+    axiosInstance.post('/api/files/process', { fileIds }),
+
+  // 获取文档索引
+  getDocumentIndexes: (fileId?: string) =>
+    axiosInstance.get('/api/files/document-indexes', { params: { fileId } }),
 }
 
 export const learningAPI = {

@@ -2,25 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
-/* react-split 样式 */
+/* react-split 样式 - 优化版 */
 .gutter {
-  background-color: #1f1f1f;
+  background-color: #1a1a1a;
   background-repeat: no-repeat;
   background-position: 50%;
-  cursor: col-resize;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
 .gutter:hover {
   background-color: #2a2a2a;
 }
 
+.gutter:active {
+  background-color: #00D9FF30;
+}
+
 .gutter.gutter-horizontal {
+  cursor: col-resize;
   background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
 }
 
+.gutter.gutter-horizontal:hover {
+  background-color: #00D9FF20;
+}
+
 .gutter.gutter-vertical {
-  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFCAYAAABSZcN5AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAANSURBVBiVY/j//z8DAAj8Av6Fzas0AAAAAElFTkSuQmCC');
   cursor: row-resize;
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFCAYAAABSZcN5AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAANSURBVBiVY/j//z8DAAj8Av6Fzas0AAAAAElFTkSuQmCC');
+}
+
+.gutter.gutter-vertical:hover {
+  background-color: #00D9FF20;
+}
+
+/* 响应式 Split 容器 */
+.split {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.split-horizontal {
+  flex-direction: row;
+}
+
+.split-vertical {
+  flex-direction: column;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .gutter {
+    background-color: #2a2a2a;
+  }
+  
+  .gutter.gutter-horizontal {
+    width: 12px !important;
+  }
+  
+  .gutter.gutter-vertical {
+    height: 12px !important;
+  }
 }
 
 /* Grok 风格全局样式 */

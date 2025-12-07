@@ -45,6 +45,7 @@ services:
       dockerfile: Dockerfile
     container_name: bidding_backend
     restart: unless-stopped  # 自动重启
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
       # 数据库配置
       DB_HOST: postgres

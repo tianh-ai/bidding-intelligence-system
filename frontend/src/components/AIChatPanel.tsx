@@ -2,12 +2,13 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import { Input, Button, Select, Avatar, Tooltip, message as antdMessage, Upload, Dropdown } from 'antd'
 import { SendOutlined, ClearOutlined, UserOutlined, RobotOutlined, StopOutlined, LikeOutlined, DislikeOutlined, CheckCircleOutlined, PaperClipOutlined, ThunderboltOutlined, CloseOutlined } from '@ant-design/icons'
-import type { UploadFile } from 'antd'
+import type { UploadFile, MenuProps } from 'antd'
 import { useChatStore } from '@/store/chatStore'
 import { useAuthStore } from '@/store/authStore'
 import ReactMarkdown from 'react-markdown'
 import type { ChatMessage } from '@/types'
 import { llmAPI, promptAPI } from '@/services/api'
+import { useNavigate } from 'react-router-dom'
 
 // 1. 提取 MessageItem 子组件
 interface MessageItemProps {
@@ -99,6 +100,7 @@ const AIChatPanel: React.FC = () => {
     setCurrentModel,
   } = useChatStore()
   const { user } = useAuthStore()
+  const navigate = useNavigate()
 
   // 1. 使用 useMemo 稳定化 usernameInitial prop
   const usernameInitial = useMemo(() => user?.username?.[0]?.toUpperCase(), [user])
@@ -142,13 +144,40 @@ const AIChatPanel: React.FC = () => {
         console.log('[AIChatPanel] 开始获取提示词列表...')
         const res = await promptAPI.getTemplates()
         console.log('[AIChatPanel] 提示词API响应:', res.data)
-        setPrompts(res.data.templates || [])
+        const data = Array.isArray(res.data)
+          ? res.data
+          : res.data?.templates || []
+        setPrompts(data)
       } catch (error) {
         console.error('[AIChatPanel] 获取提示词失败:', error)
       }
     }
     fetchPrompts()
   }, [])
+
+  const promptMenuItems: MenuProps['items'] = useMemo(() => {
+    const footerItem = {
+      key: 'manage-prompts',
+      icon: <ThunderboltOutlined className="text-grok-accent" />, 
+      label: <span className="text-grok-accent">打开提示词库</span>,
+      onClick: () => navigate('/prompts'),
+    }
+
+    if (prompts.length === 0) {
+      return [footerItem]
+    }
+
+    const items = prompts.map((prompt) => ({
+      key: prompt.id,
+      label: <span className="text-grok-text">{prompt.title}</span>,
+      onClick: () => {
+        setInput(prompt.content || '')
+        antdMessage.success(`提示词已加载：${prompt.title}`)
+      },
+    }))
+
+    return [...items, { type: 'divider', key: 'divider' }, footerItem]
+  }, [prompts, navigate])
 
   const handleFeedback = async (messageId: string, rating: 'good' | 'bad') => {
     const messageIndex = messages.findIndex((m) => m.id === messageId)
@@ -348,7 +377,9 @@ const AIChatPanel: React.FC = () => {
                 <span className="text-grok-text max-w-[120px] truncate">{file.name}</span>
                 <CloseOutlined
                   className="text-grok-textMuted hover:text-red-500 cursor-pointer"
-                  onClick={() => setAttachments(attachments.filter((f) => f.uid !== file.uid))}
+                  onClick={() =>
+                    setAttachments((prev) => prev.filter((f) => f.uid !== file.uid))
+                  }
                 />
               </div>
             ))}
@@ -365,17 +396,22 @@ const AIChatPanel: React.FC = () => {
             <div className="flex gap-2 items-center">
               {/* 附件上传按钮 */}
               <Upload
-                beforeUpload={(file) => {
-                  if (attachments.length >= 5) {
-                    antdMessage.warning('最多只能上传5个附件')
+                  multiple
+                  beforeUpload={(file) => {
+                    setAttachments((prev) => {
+                      if (prev.length >= 5) {
+                        antdMessage.warning('最多只能上传5个附件')
+                        return prev
+                      }
+                      if (prev.some((item) => item.uid === file.uid)) {
+                        return prev
+                      }
+                      return [...prev, file]
+                    })
                     return false
-                  }
-                  setAttachments([...attachments, file])
-                  return false
-                }}
-                fileList={[]}
-                showUploadList={false}
-                accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                  }}
+                  showUploadList={false}
+                  accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
               >
                 <Tooltip title="添加附件 (最多5个)">
                   <Button
@@ -389,14 +425,9 @@ const AIChatPanel: React.FC = () => {
               {/* 提示词快捷选择 */}
               <Dropdown
                 menu={{
-                  items: prompts.map((p) => ({
-                    key: p.id,
-                    label: p.title,
-                    onClick: () => setInput(p.content),
-                  })),
+                  items: promptMenuItems,
                 }}
                 placement="topLeft"
-                disabled={prompts.length === 0}
               >
                 <Tooltip title="快捷提示词">
                   <Button
@@ -410,7 +441,7 @@ const AIChatPanel: React.FC = () => {
               </Dropdown>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-end">
               <Input.TextArea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -422,15 +453,15 @@ const AIChatPanel: React.FC = () => {
                 }}
                 placeholder="输入消息... (Shift+Enter 换行)"
                 autoSize={{ minRows: 3, maxRows: 10 }}
-                className="grok-input"
-                style={{ minHeight: '80px' }}
+                className="grok-input flex-1 min-h-[80px]"
               />
               <Button
                 type="primary"
                 icon={<SendOutlined />}
                 onClick={handleSend}
                 disabled={!input.trim()}
-                className="grok-btn-primary"
+                className="grok-btn-primary flex-shrink-0 self-end"
+                style={{ minWidth: 120 }}
               />
             </div>
           </div>

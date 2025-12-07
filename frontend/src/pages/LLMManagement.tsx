@@ -20,6 +20,9 @@ import {
   CheckCircleOutlined,
   ExperimentOutlined,
 } from '@ant-design/icons'
+import Split from 'react-split'
+import AIChatPanel from '@/components/AIChatPanel'
+import { useChatStore } from '@/store/chatStore'
 import { llmAPI } from '@/services/api'
 import type { LLMModel } from '@/types'
 
@@ -29,6 +32,7 @@ const LLMManagement: React.FC = () => {
   const [editingModel, setEditingModel] = useState<any | null>(null)
   const [testingModel, setTestingModel] = useState<string | null>(null)
   const [form] = Form.useForm()
+  const { isOpen: isChatOpen } = useChatStore()
 
   useEffect(() => {
     loadModels()
@@ -185,9 +189,20 @@ const LLMManagement: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-grok-text">大模型管理</h1>
+    <Split
+      className="flex h-full overflow-hidden"
+      sizes={isChatOpen ? [60, 40] : [100, 0]}
+      minSize={isChatOpen ? [400, 320] : [100, 0]}
+      maxSize={isChatOpen ? [Infinity, 700] : [Infinity, 0]}
+      gutterSize={isChatOpen ? 8 : 0}
+      snapOffset={30}
+      dragInterval={1}
+      direction="horizontal"
+      cursor="col-resize"
+    >
+      <div className="space-y-6 overflow-auto pr-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-grok-text">大模型管理</h1>
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -299,7 +314,14 @@ const LLMManagement: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+      </div>
+
+      {isChatOpen && (
+        <div className="h-full overflow-hidden">
+          <AIChatPanel />
+        </div>
+      )}
+    </Split>
   )
 }
 

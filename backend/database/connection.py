@@ -33,11 +33,15 @@ class DatabaseConnection:
         Returns:
             list: 字典列表,每个字典代表一行数据
         """
-        with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(sql, params or ())
-            results = cursor.fetchall()
-            # 转换为普通字典列表
-            return [dict(row) for row in results] if results else []
+        try:
+            with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(sql, params or ())
+                results = cursor.fetchall()
+                # 转换为普通字典列表
+                return [dict(row) for row in results] if results else []
+        except Exception:
+            self.conn.rollback()
+            raise
     
     def query_one(self, sql, params=None):
         """
@@ -50,11 +54,19 @@ class DatabaseConnection:
         Returns:
             dict or None: 单条数据字典,无结果返回None
         """
-        with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(sql, params or ())
-            result = cursor.fetchone()
-            # 转换为普通字典
-            return dict(result) if result else None
+        try:
+            with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(sql, params or ())
+                result = cursor.fetchone()
+                # 转换为普通字典
+                return dict(result) if result else None
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def query_all(self, sql, params=None):
+        """与 query 功能相同，提供向后兼容的接口名称"""
+        return self.query(sql, params)
     
     def execute(self, sql, params=None):
         """
@@ -67,14 +79,18 @@ class DatabaseConnection:
         Returns:
             str or int or None: INSERT ... RETURNING id返回的ID,否则返回None
         """
-        with self.conn.cursor() as cursor:
-            cursor.execute(sql, params or ())
-            self.conn.commit()
-            # 如果是 INSERT ... RETURNING id,返回该ID
-            if cursor.description:
-                result = cursor.fetchone()
-                return result[0] if result else None
-            return None
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute(sql, params or ())
+                self.conn.commit()
+                # 如果是 INSERT ... RETURNING id,返回该ID
+                if cursor.description:
+                    result = cursor.fetchone()
+                    return result[0] if result else None
+                return None
+        except Exception:
+            self.conn.rollback()
+            raise
     
     def execute_many(self, sql, params_list):
         """
@@ -87,10 +103,14 @@ class DatabaseConnection:
         Returns:
             int: 受影响的行数
         """
-        with self.conn.cursor() as cursor:
-            cursor.executemany(sql, params_list)
-            self.conn.commit()
-            return cursor.rowcount
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.executemany(sql, params_list)
+                self.conn.commit()
+                return cursor.rowcount
+        except Exception:
+            self.conn.rollback()
+            raise
     
     @contextmanager
     def transaction(self):

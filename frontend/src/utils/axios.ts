@@ -4,9 +4,6 @@ import { API_BASE_URL, STORAGE_KEYS } from '@/config/constants'
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 })
 
 // 请求拦截器 - 添加 token
@@ -15,6 +12,15 @@ axiosInstance.interceptors.request.use(
     const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN)
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    // 确保表单上传时让浏览器自行设置 multipart 边界
+    if (config.data instanceof FormData) {
+      const headers = config.headers as any
+      if (headers?.has?.('Content-Type')) {
+        headers.delete('Content-Type')
+      } else if (headers && headers['Content-Type']) {
+        delete headers['Content-Type']
+      }
     }
     return config
   },

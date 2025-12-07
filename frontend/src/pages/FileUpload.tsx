@@ -1,33 +1,113 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Card,
   Upload,
   Button,
   Table,
-  message,
   Tag,
   Space,
   Modal,
   Progress,
+  List,
+  Tree,
+  Descriptions,
+  Statistic,
+  Row,
+  Col,
+  Popconfirm,
+  Tabs,
+  App,
 } from 'antd'
 import {
   UploadOutlined,
   FolderOpenOutlined,
   DeleteOutlined,
   DownloadOutlined,
-  CheckCircleOutlined,
+  FileTextOutlined,
+  DatabaseOutlined,
+  FolderOutlined,
+  EyeOutlined,
 } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
+import Split from 'react-split'
 import { fileAPI } from '@/services/api'
 import type { FileInfo } from '@/types'
+import { useAuthStore } from '@/store/authStore'
+
+interface DocumentIndex {
+  id: string
+  fileName: string
+  chapters: {
+    title: string
+    level: number
+    pageNum: number
+    children?: any[]
+  }[]
+}
+
+interface KnowledgeEntry {
+  id: string
+  title: string
+  content: string
+  category: string
+  fileName: string
+  createdAt: string
+}
+
+interface DatabaseStats {
+  totalFiles: number
+  totalSize: number
+  storageUsed: number
+  knowledgeEntries: number
+  lastUpdate: string
+}
 
 const FileUpload: React.FC = () => {
+  const { message } = App.useApp() // 使用Ant Design 5.x hooks
+  const { user } = useAuthStore() // 获取当前登录用户
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [matchingResult, setMatchingResult] = useState<any>(null)
-  const [duplicates, setDuplicates] = useState<any[]>([])
-  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [uploadedFilesList, setUploadedFilesList] = useState<FileInfo[]>([])
+  const [databaseStats, setDatabaseStats] = useState<DatabaseStats | null>(null)
+  const [knowledgeEntries, setKnowledgeEntries] = useState<KnowledgeEntry[]>([])
+  const [documentIndexes, setDocumentIndexes] = useState<DocumentIndex[]>([])
+  const [selectedDoc, setSelectedDoc] = useState<DocumentIndex | null>(null)
+  const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set())
+
+  // 初始加载数据
+  useEffect(() => {
+    loadUploadedFiles()
+    loadDatabaseStats()
+    loadKnowledgeEntries()
+  }, [])
+
+  const loadUploadedFiles = async () => {
+    try {
+      const response = await fileAPI.getFiles()
+      setUploadedFilesList(response.data?.files || [])
+    } catch (error) {
+      console.error('加载文件列表失败:', error)
+    }
+  }
+
+  const loadDatabaseStats = async () => {
+    try {
+      const response = await fileAPI.getDatabaseDetails()
+      setDatabaseStats(response.data)
+    } catch (error) {
+      console.error('获取数据库统计失败:', error)
+    }
+  }
+
+  const loadKnowledgeEntries = async () => {
+    try {
+      const response = await fileAPI.getKnowledgeBaseEntries()
+      setKnowledgeEntries(response.data || [])
+    } catch (error) {
+      console.error('获取知识库条目失败:', error)
+    }
+  }
 
   const handleUpload = async () => {
     if (fileList.length === 0) {
@@ -35,93 +115,174 @@ const FileUpload: React.FC = () => {
       return
     }
 
+    if (!user || !user.username) {
+      message.error('无法获取当前用户信息，请重新登录')
+      return
+    }
+
     const formData = new FormData()
+    let hasValidFile = false
+    
+    // 关键修复：正确获取File对象
     fileList.forEach((file) => {
-      // UploadFile对象的originFileObj才是真正的File对象
-      if (file.originFileObj) {
-        formData.append('files', file.originFileObj)
+      // Ant Design Upload的file有三种可能：
+      // 1. file.originFileObj - 新上传的文件
+      // 2. file本身就是File对象
+      const fileObj = file.originFileObj || file
+      
+      if (fileObj instanceof File || (fileObj && fileObj.size !== undefined)) {
+        console.log('添加文件:', fileObj.name || file.name, '大小:', fileObj.size)
+        formData.append('files', fileObj)
+        hasValidFile = true
+      } else {
+        console.error('无效的文件对象:', file)
       }
     })
+    
+    if (!hasValidFile) {
+      message.error('没有有效的文件可以上传')
+      return
+    }
+
+    // 添加上传人参数（必需）
+    formData.append('uploader', user.username)
+    // 添加重复文件处理策略（默认跳过）
+    formData.append('duplicate_action', 'skip')
 
     setUploading(true)
+    console.log('开始上传文件，数量:', fileList.length, '上传人:', user.username)
+    
     try {
       const response = await fileAPI.uploadFiles(formData, setUploadProgress)
+      console.log('上传成功响应:', response.data)
       
-      // 如果返回重复文件信息，提示用户选择覆盖
-      if (response?.data?.duplicates && response.data.duplicates.length > 0) {
-        setDuplicates(response.data.duplicates)
-        setShowDuplicateModal(true)
+      const result = response.data
+      
+      // 显示上传结果
+      if (result.uploaded && result.uploaded.length > 0) {
+        message.success(`成功上传 ${result.uploaded.length} 个文件`)
       }
-
-      message.success('文件上传成功（解析已安排）')
+      
+      // 显示重复文件信息
+      if (result.duplicates && result.duplicates.length > 0) {
+        result.duplicates.forEach((f: any) => {
+          message.warning(`${f.name}: ${f.message || '文件已存在，已跳过'}`)
+        })
+      }
+      
+      if (result.failed && result.failed.length > 0) {
+        result.failed.forEach((f: any) => {
+          message.error(`${f.name}: ${f.error}`)
+        })
+      }
+      
+      if (result.duplicates && result.duplicates.length > 0) {
+        result.duplicates.forEach((f: any) => {
+          message.warning(`${f.name}: 文件已存在`)
+        })
+      }
+      
+      // 清空文件列表
       setFileList([])
       setUploadProgress(0)
 
-      // 显示匹配结果（可能包含 duplicates）
-      setMatchingResult(response.data)
+      // 启动文件处理流程
+      const uploadedFiles = result.uploaded || []
+      console.log('已上传文件列表:', uploadedFiles)
+      
+      if (uploadedFiles.length > 0) {
+        // 处理文件生成知识库
+        await processUploadedFiles(uploadedFiles)
+      }
+
+      // 刷新所有数据
+      console.log('刷新页面数据...')
+      await Promise.all([
+        loadUploadedFiles(),
+        loadDatabaseStats(),
+        loadKnowledgeEntries(),
+      ])
+      console.log('数据刷新完成')
+      
     } catch (error: any) {
-      console.error('Upload error:', error)
-      const errorMsg = error.response?.data?.detail || error.response?.data?.message || error.message || '上传失败'
+      console.error('上传错误:', error)
+      console.error('错误详情:', error.response?.data)
+      
+      // 处理422错误（FastAPI validation error）
+      let errorMsg = '上传失败'
+      
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail
+        
+        // 如果detail是数组（FastAPI validation errors）
+        if (Array.isArray(detail)) {
+          errorMsg = detail.map((err: any) => {
+            if (typeof err === 'string') return err
+            if (err.msg) return `${err.loc?.join('.')}: ${err.msg}`
+            return JSON.stringify(err)
+          }).join('; ')
+        } 
+        // 如果detail是字符串
+        else if (typeof detail === 'string') {
+          errorMsg = detail
+        }
+        // 其他情况
+        else {
+          errorMsg = JSON.stringify(detail)
+        }
+      } else if (error.response?.data?.message) {
+        errorMsg = error.response.data.message
+      } else if (error.message) {
+        errorMsg = error.message
+      }
+      
       message.error(errorMsg)
     } finally {
       setUploading(false)
     }
   }
 
-  const handleConfirmOverwrite = async () => {
-    // 重新上传所有当前选择文件并携带 overwrite=true
-    if (fileList.length === 0) {
-      setShowDuplicateModal(false)
-      return
-    }
-
-    const formData = new FormData()
-    fileList.forEach((file) => {
-      if (file.originFileObj) formData.append('files', file.originFileObj)
-    })
-    formData.append('overwrite', 'true')
+  // 处理上传的文件：生成知识库和文档索引
+  const processUploadedFiles = async (files: FileInfo[]) => {
+    const fileIds = files.map(f => f.id)
+    console.log('准备处理文件IDs:', fileIds)
+    setProcessingFiles(new Set(fileIds))
 
     try {
-      setUploading(true)
-      const response = await fileAPI.uploadFiles(formData, setUploadProgress)
-      message.success('覆盖上传已提交，解析已安排')
-      setMatchingResult(response.data)
-      setDuplicates([])
-      setShowDuplicateModal(false)
-      setFileList([])
-    } catch (err: any) {
-      message.error('覆盖上传失败')
+      // 调用后端API启动文件处理
+      console.log('调用processFiles API...')
+      const response = await fileAPI.processFiles(fileIds)
+      console.log('处理响应:', response.data)
+      
+      if (response.data?.documentIndexes) {
+        setDocumentIndexes(response.data.documentIndexes)
+        console.log('已设置文档索引:', response.data.documentIndexes.length)
+      }
+
+      message.success('文件处理完成，已生成文档索引和知识库')
+    } catch (error: any) {
+      console.error('文件处理错误:', error)
+      const errorMsg = error.response?.data?.detail || error.message || '文件处理失败'
+      message.error(errorMsg)
     } finally {
-      setUploading(false)
-      setUploadProgress(0)
+      setProcessingFiles(new Set())
     }
   }
 
-  const handleDelete = async (fileId: string) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除这个文件吗？',
-      okText: '确定',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await fileAPI.deleteFile(fileId)
-          message.success('删除成功')
-          // 从当前结果中移除已删除的文件
-          if (matchingResult?.files) {
-            setMatchingResult({
-              ...matchingResult,
-              files: matchingResult.files.filter((f: any) => f.id !== fileId)
-            })
-          }
-        } catch (error: any) {
-          message.error(error.response?.data?.detail || error.response?.data?.message || '删除失败')
-        }
-      },
-    })
+  // 删除已上传的文件
+  const handleDeleteFile = async (fileId: string) => {
+    try {
+      await fileAPI.deleteFile(fileId)
+      message.success('文件删除成功')
+      await loadUploadedFiles()
+      await loadDatabaseStats()
+    } catch (error) {
+      message.error('删除文件失败')
+    }
   }
 
-  const handleDownload = async (fileId: string, fileName: string) => {
+  // 下载文件
+  const handleDownloadFile = async (fileId: string, fileName: string) => {
     try {
       const response = await fileAPI.downloadFile(fileId)
       const url = window.URL.createObjectURL(new Blob([response.data]))
@@ -131,44 +292,33 @@ const FileUpload: React.FC = () => {
       document.body.appendChild(link)
       link.click()
       link.remove()
-    } catch (error: any) {
-      message.error('下载失败')
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      message.error('下载文件失败')
     }
   }
 
-  // 不再自动加载历史文件，仅显示当次上传结果
 
-  const columns = [
+  // 上传文件列表的列定义
+  const uploadedFilesColumns = [
     {
       title: '文件名',
       dataIndex: 'name',
       key: 'name',
       ellipsis: true,
-    },
-    {
-      title: '类型',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => {
-        const colorMap: Record<string, string> = {
-          tender: 'blue',
-          proposal: 'green',
-          summary: 'orange',
-          other: 'default',
-        }
-        const labelMap: Record<string, string> = {
-          tender: '招标文件',
-          proposal: '投标文件',
-          summary: '总结文件',
-          other: '其他',
-        }
-        return <Tag color={colorMap[type]}>{labelMap[type]}</Tag>
-      },
+      render: (text: string, record: FileInfo) => (
+        <Space>
+          <FileTextOutlined />
+          <span>{text}</span>
+          {processingFiles.has(record.id) && <Tag color="processing">处理中</Tag>}
+        </Space>
+      ),
     },
     {
       title: '大小',
       dataIndex: 'size',
       key: 'size',
+      width: 120,
       render: (size: number) => {
         if (size < 1024) return `${size} B`
         if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`
@@ -179,150 +329,318 @@ const FileUpload: React.FC = () => {
       title: '上传时间',
       dataIndex: 'uploadedAt',
       key: 'uploadedAt',
-      render: (date: string) => new Date(date).toLocaleString(),
+      width: 180,
+      render: (date: string) => new Date(date).toLocaleString('zh-CN'),
     },
     {
       title: '操作',
-      key: 'action',
+      key: 'actions',
+      width: 150,
       render: (_: any, record: FileInfo) => (
         <Space>
           <Button
             type="link"
+            size="small"
             icon={<DownloadOutlined />}
-            onClick={() => handleDownload(record.id, record.name)}
+            onClick={() => handleDownloadFile(record.id, record.name)}
           >
             下载
           </Button>
-          <Button
-            type="link"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.id)}
+          <Popconfirm
+            title="确定删除此文件？"
+            onConfirm={() => handleDeleteFile(record.id)}
+            okText="确定"
+            cancelText="取消"
           >
-            删除
-          </Button>
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
   ]
 
+  // 渲染文档目录树
+  const renderDocumentTree = (chapters: any[]) => {
+    const treeData = chapters.map((chapter, index) => ({
+      title: `${chapter.title} (第${chapter.pageNum}页)`,
+      key: `${index}`,
+      children: chapter.children?.map((child: any, childIndex: number) => ({
+        title: `${child.title} (第${child.pageNum}页)`,
+        key: `${index}-${childIndex}`,
+      })),
+    }))
+
+    return <Tree treeData={treeData} defaultExpandAll />
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="h-full w-full overflow-hidden">
+      <div className="px-6 py-4">
         <h1 className="text-2xl font-bold text-grok-text">文件上传及存档</h1>
       </div>
 
-      {/* Upload Card */}
-      <Card className="grok-card">
-        <div className="space-y-4">
-          <Upload.Dragger
-            multiple
-            fileList={fileList}
-            onChange={({ fileList }) => setFileList(fileList)}
-            beforeUpload={() => false}
-            className="grok-input"
-          >
-            <p className="ant-upload-drag-icon">
-              <FolderOpenOutlined className="text-grok-accent text-5xl" />
-            </p>
-            <p className="ant-upload-text text-grok-text">
-              点击或拖拽文件到此区域上传
-            </p>
-            <p className="ant-upload-hint text-grok-textMuted">
-              支持单个或批量上传。支持 PDF、Word、Excel 等格式
-            </p>
-          </Upload.Dragger>
-
-          {uploading && (
-            <Progress
-              percent={uploadProgress}
-              status="active"
-              strokeColor="#00D9FF"
-            />
-          )}
-
-          <div className="flex gap-2">
-            <Button
-              type="primary"
-              icon={<UploadOutlined />}
-              onClick={handleUpload}
-              disabled={fileList.length === 0}
-              loading={uploading}
-              className="grok-btn-primary"
-            >
-              开始上传
-            </Button>
-            <Button
-              onClick={() => setFileList([])}
-              disabled={fileList.length === 0 || uploading}
-              className="grok-btn-secondary"
-            >
-              清空列表
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Matching Result */}
-      {matchingResult && (
-        <Card
-          className="grok-card"
-          title={
-            <div className="flex items-center gap-2">
-              <CheckCircleOutlined className="text-grok-success" />
-              <span>匹配结果</span>
-            </div>
-          }
-        >
-          <div className="space-y-2">
-            <p className="text-grok-text">
-              共上传 <span className="text-grok-accent">{matchingResult.totalFiles}</span> 个文件
-            </p>
-            <p className="text-grok-text">
-              成功匹配 <span className="text-grok-accent">{matchingResult.matchedPairs}</span> 对
-            </p>
-            {matchingResult.unmatchedFiles && matchingResult.unmatchedFiles.length > 0 && (
-              <p className="text-grok-warning">
-                未匹配文件：{matchingResult.unmatchedFiles.join(', ')}
-              </p>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* File List - 仅显示当次上传 */}
-      {matchingResult?.files && matchingResult.files.length > 0 && (
-        <Card className="grok-card" title="已上传清单">
-          <Table
-            dataSource={matchingResult.files}
-            columns={columns}
-            rowKey="id"
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `本次上传 ${total} 个文件`,
-            }}
-          />
-        </Card>
-      )}
-
-      {/* Duplicate Modal */}
-      <Modal
-        title="发现重复文件"
-        open={showDuplicateModal}
-        onOk={handleConfirmOverwrite}
-        onCancel={() => setShowDuplicateModal(false)}
-        okText="覆盖并上传"
-        cancelText="取消"
+      <Split
+        className="flex h-[calc(100%-80px)]"
+        sizes={[60, 40]}
+        minSize={[400, 300]}
+        maxSize={[Infinity, 700]}
+        gutterSize={8}
+        snapOffset={30}
+        dragInterval={1}
+        direction="horizontal"
+        cursor="col-resize"
       >
-        <div>
-          <p>检测到以下重复文件，是否要覆盖已有文件并重新解析？</p>
-          <ul>
-            {duplicates.map((d) => (
-              <li key={d.existing_id}>{d.name} （已存在 ID: {d.existing_id}）</li>
-            ))}
-          </ul>
+        {/* 左侧：上传区域和上传文件列表 */}
+        <div className="h-full overflow-y-auto px-6 space-y-6">
+          {/* 文件上传卡片 */}
+          <Card className="grok-card">
+            <div className="space-y-4">
+              <Upload.Dragger
+                multiple
+                fileList={fileList}
+                onChange={({ fileList }) => setFileList(fileList)}
+                beforeUpload={(file) => {
+                  // 返回 false 阻止自动上传，但保留文件对象
+                  return false
+                }}
+                customRequest={() => {
+                  // 不使用默认上传，我们手动控制
+                }}
+                className="grok-input"
+                style={{ minHeight: 180 }}
+              >
+                <p className="ant-upload-drag-icon">
+                  <FolderOpenOutlined className="text-grok-accent text-5xl" />
+                </p>
+                <p className="ant-upload-text text-grok-text">
+                  点击或拖拽文件到此区域上传
+                </p>
+                <p className="ant-upload-hint text-grok-textMuted">
+                  支持单个或批量上传。支持 PDF、Word、Excel 等格式
+                </p>
+              </Upload.Dragger>
+
+              {uploading && (
+                <Progress
+                  percent={uploadProgress}
+                  status="active"
+                  strokeColor="#00D9FF"
+                />
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="primary"
+                  icon={<UploadOutlined />}
+                  onClick={handleUpload}
+                  disabled={fileList.length === 0}
+                  loading={uploading}
+                  className="grok-btn-primary"
+                >
+                  开始上传
+                </Button>
+                <Button
+                  onClick={() => setFileList([])}
+                  disabled={fileList.length === 0 || uploading}
+                  className="grok-btn-secondary"
+                >
+                  清空列表
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* 已上传文件列表 */}
+          <Card 
+            className="grok-card" 
+            title={
+              <Space>
+                <FileTextOutlined />
+                <span>已上传文件 ({uploadedFilesList.length})</span>
+              </Space>
+            }
+          >
+            <Table
+              dataSource={uploadedFilesList}
+              columns={uploadedFilesColumns}
+              rowKey="id"
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 个文件`,
+              }}
+              size="small"
+            />
+          </Card>
         </div>
+
+        {/* 右侧：文件存档和知识库预览 */}
+        <div className="h-full overflow-y-auto px-6 space-y-6">
+          {/* 数据库统计 */}
+          <Card 
+            className="grok-card"
+            title={
+              <Space>
+                <DatabaseOutlined />
+                <span>存档统计</span>
+              </Space>
+            }
+          >
+            {databaseStats ? (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Statistic
+                    title="文件总数"
+                    value={databaseStats.totalFiles}
+                    suffix="个"
+                    valueStyle={{ color: '#00D9FF' }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title="存储占用"
+                    value={databaseStats.storageUsed}
+                    suffix="MB"
+                    precision={2}
+                    valueStyle={{ color: '#00D9FF' }}
+                  />
+                </Col>
+                <Col span={12} className="mt-4">
+                  <Statistic
+                    title="知识条目"
+                    value={databaseStats.knowledgeEntries}
+                    suffix="条"
+                    valueStyle={{ color: '#00D9FF' }}
+                  />
+                </Col>
+                <Col span={12} className="mt-4">
+                  <Statistic
+                    title="最后更新"
+                    value={databaseStats.lastUpdate}
+                    valueStyle={{ fontSize: '14px', color: '#00D9FF' }}
+                  />
+                </Col>
+              </Row>
+            ) : (
+              <div className="text-center text-grok-textMuted py-8">
+                暂无统计数据
+              </div>
+            )}
+          </Card>
+
+          {/* 文档索引和知识库 */}
+          <Card className="grok-card">
+            <Tabs
+              items={[
+                {
+                  key: 'indexes',
+                  label: (
+                    <span>
+                      <FolderOutlined /> 文档目录索引
+                    </span>
+                  ),
+                  children: (
+                    <div className="space-y-4">
+                      {documentIndexes.length > 0 ? (
+                        documentIndexes.map((doc) => (
+                          <Card
+                            key={doc.id}
+                            size="small"
+                            title={doc.fileName}
+                            extra={
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<EyeOutlined />}
+                                onClick={() => setSelectedDoc(doc)}
+                              >
+                                查看
+                              </Button>
+                            }
+                          >
+                            {renderDocumentTree(doc.chapters)}
+                          </Card>
+                        ))
+                      ) : (
+                        <div className="text-center text-grok-textMuted py-8">
+                          暂无文档索引，请上传文件后自动生成
+                        </div>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'knowledge',
+                  label: (
+                    <span>
+                      <DatabaseOutlined /> 知识库条目
+                    </span>
+                  ),
+                  children: (
+                    <List
+                      dataSource={knowledgeEntries}
+                      locale={{ emptyText: '暂无知识库条目' }}
+                      renderItem={(item) => (
+                        <List.Item
+                          actions={[
+                            <Button type="link" size="small" icon={<EyeOutlined />}>
+                              查看
+                            </Button>,
+                          ]}
+                        >
+                          <List.Item.Meta
+                            title={item.title}
+                            description={
+                              <Space direction="vertical" size="small">
+                                <Tag color="blue">{item.category}</Tag>
+                                <span className="text-xs text-grok-textMuted">
+                                  来源: {item.fileName}
+                                </span>
+                                <span className="text-xs text-grok-textMuted">
+                                  创建时间: {new Date(item.createdAt).toLocaleString('zh-CN')}
+                                </span>
+                              </Space>
+                            }
+                          />
+                        </List.Item>
+                      )}
+                      pagination={{
+                        pageSize: 5,
+                        size: 'small',
+                      }}
+                    />
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        </div>
+      </Split>
+
+      {/* 文档查看模态框 */}
+      <Modal
+        title={selectedDoc?.fileName}
+        open={!!selectedDoc}
+        onCancel={() => setSelectedDoc(null)}
+        footer={null}
+        width={800}
+      >
+        {selectedDoc && (
+          <div className="space-y-4">
+            <Descriptions title="文档信息" column={1} size="small">
+              <Descriptions.Item label="文件名">{selectedDoc.fileName}</Descriptions.Item>
+              <Descriptions.Item label="章节数">{selectedDoc.chapters.length}</Descriptions.Item>
+            </Descriptions>
+            {renderDocumentTree(selectedDoc.chapters)}
+          </div>
+        )}
       </Modal>
     </div>
   )
