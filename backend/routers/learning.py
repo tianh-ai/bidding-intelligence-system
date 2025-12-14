@@ -127,13 +127,20 @@ async def get_logic_database():
         # 获取章节级规则
         chapter_rules = db.query(
             """
-            SELECT 'structure' as rule_type, id, chapter_id, rule_content, confidence, created_at
+            SELECT 'structure' as rule_type, id, chapter_id, rule_content,
+                   COALESCE(priority, 1.0)::float as confidence, created_at
             FROM chapter_structure_rules WHERE is_active = TRUE
             UNION ALL
-            SELECT 'content' as rule_type, id, chapter_id, rule_content, confidence, created_at
+            SELECT 'content' as rule_type, id, chapter_id, rule_content,
+                   COALESCE(priority, 1.0)::float as confidence, created_at
             FROM chapter_content_rules WHERE is_active = TRUE
             UNION ALL
-            SELECT 'mandatory' as rule_type, id, chapter_id, rule_content, confidence, created_at
+            SELECT 'mandatory' as rule_type, id, chapter_id, rule_content,
+                   CASE 
+                       WHEN priority ~ '^[0-9]+(\\.[0-9]+)?$' THEN priority::numeric
+                       ELSE 1.0
+                   END as confidence,
+                   created_at
             FROM chapter_mandatory_rules WHERE is_active = TRUE
             ORDER BY created_at DESC
             LIMIT 100
@@ -143,10 +150,12 @@ async def get_logic_database():
         # 获取全局级规则
         global_rules = db.query(
             """
-            SELECT 'structure' as rule_type, id, tender_file_id, rule_content, confidence, created_at
+            SELECT 'structure' as rule_type, id, tender_file_id, rule_content,
+                   COALESCE(priority, 1.0)::float as confidence, created_at
             FROM global_structure_rules WHERE is_active = TRUE
             UNION ALL
-            SELECT 'content' as rule_type, id, tender_file_id, rule_content, confidence, created_at
+            SELECT 'content' as rule_type, id, tender_file_id, rule_content,
+                   COALESCE(priority, 1.0)::float as confidence, created_at
             FROM global_content_rules WHERE is_active = TRUE
             ORDER BY created_at DESC
             LIMIT 100

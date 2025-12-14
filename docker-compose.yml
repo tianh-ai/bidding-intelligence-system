@@ -44,7 +44,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: bidding_backend
-    restart: unless-stopped  # 自动重启
+    restart: always  # 系统启动时自动运行
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
       # 数据库配置
@@ -71,10 +71,10 @@ services:
       PORT: 8000
       LOG_LEVEL: INFO
     ports:
-      - "8000:8000"  # 统一使用 8000 端口
+      - "0.0.0.0:18888:8000"  # 避免与本地/其他服务冲突，外部使用18888
     volumes:
       - ./backend:/app
-      - ./backend/uploads:/app/uploads
+      - /Volumes/ssd/bidding-data:/app/data  # 数据目录挂载到SSD
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,6 +89,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: bidding_celery_worker
+    restart: always  # 系统启动时自动运行
     command: celery -A worker worker --loglevel=info
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres123@postgres:5432/bidding_db
@@ -101,6 +102,7 @@ services:
       QWEN_API_KEY: ${QWEN_API_KEY:-your-qwen-key}
     volumes:
       - ./backend:/app
+      - /Volumes/ssd/bidding-data:/app/data  # 数据目录挂载到SSD
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,11 +117,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: bidding_frontend
-    restart: unless-stopped
+    restart: always  # 系统启动时自动运行
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: http://localhost:18888
     ports:
-      - "5173:5173"  # Vite 默认端口
+      - "13000:5173"  # 对外使用 13000，避免冲突
     volumes:
       - ./frontend:/app
       - /app/node_modules

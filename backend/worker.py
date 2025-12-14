@@ -3,8 +3,8 @@ Celery worker configuration for async task processing.
 """
 
 from celery import Celery
-from backend.core.config import settings
-from backend.core.logger import logger
+from core.config import settings
+from core.logger import logger
 
 # Initialize Celery app
 celery_app = Celery(
@@ -43,7 +43,11 @@ celery_app.conf.update(
     worker_concurrency=settings.MAX_CONCURRENT_TASKS,
 )
 
-# Auto-discover tasks
-celery_app.autodiscover_tasks(["backend"])
-
 logger.info(f"Celery worker initialized with broker: {settings.celery_broker}")
+
+# Import tasks to register them
+try:
+    import tasks  # noqa
+    logger.info("Tasks module imported successfully")
+except Exception as e:
+    logger.warning(f"Failed to import tasks module: {e}")

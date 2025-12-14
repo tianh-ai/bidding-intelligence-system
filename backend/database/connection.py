@@ -15,10 +15,10 @@ class DatabaseConnection:
         """初始化数据库连接"""
         self.conn = psycopg2.connect(
             host=os.getenv("DB_HOST", "localhost"),
-            port=int(os.getenv("DB_PORT", 5432)),
-            database=os.getenv("DB_NAME", "postgres"),
+            port=int(os.getenv("DB_PORT", 5433)),
+            database=os.getenv("DB_NAME", "bidding_db"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "your-super-secret-and-long-postgres-password")
+            password=os.getenv("DB_PASSWORD", "postgres123")
         )
         self.conn.autocommit = False
     

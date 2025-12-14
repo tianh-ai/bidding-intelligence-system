@@ -1,0 +1,168 @@
+services:
+  # PostgreSQL 数据库 with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: bidding_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bidding_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-BiddingSystem@2025}
+      # 允许所有IP连接（局域网模式）
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "${DB_EXTERNAL_PORT:-5433}:5432"
+    volumes:
+      # 数据持久化到本地目录
+      - ${HOST_DATA_POSTGRES:-./data/postgres}:/var/lib/postgresql/data
+      - ./backend/init_database.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - bidding_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command:
+      # 配置PostgreSQL允许局域网连接
+      - "postgres"
+      - "-c"
+      - "listen_addresses=*"
+      - "-c"
+      - "max_connections=200"
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: bidding_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_EXTERNAL_PORT:-6380}:6379"
+    volumes:
+      # Redis数据持久化
+      - ${HOST_DATA_REDIS:-./data/redis}:/data
+    networks:
+      - bidding_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --bind 0.0.0.0
+
+  # 后端 API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bidding_backend
+    restart: unless-stopped
+    # 生产模式：禁用热重载
+    command: uvicorn main:app --host 0.0.0.0 --port ${PORT:-18888}
+    environment:
+      # 数据库配置
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-BiddingSystem@2025}
+      DB_NAME: ${DB_NAME:-bidding_db}
+      
+      # Redis 配置
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # AI模型配置
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      
+      QWEN_API_KEY: ${QWEN_API_KEY}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      QWEN_MODEL: ${QWEN_MODEL:-qwen-plus}
+      
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      
+      # 应用配置
+      HOST: 0.0.0.0
+      PORT: ${PORT:-18888}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DEBUG: ${DEBUG:-false}
+      
+      # 安全配置
+      SECRET_KEY: ${SECRET_KEY}
+      
+      # CORS配置（允许局域网访问，使用JSON格式）
+      CORS_ORIGINS: '["http://localhost:${FRONTEND_PORT:-13000}","http://127.0.0.1:${FRONTEND_PORT:-13000}"]'
+      
+    ports:
+      - "${PORT:-18888}:${PORT:-18888}"
+    volumes:
+      # 只映射上传文件目录，代码不映射（避免热重载）
+      - ${HOST_DATA_UPLOADS:-./data/uploads}:/app/uploads
+      - ${HOST_DATA_LOGS:-./data/logs}:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bidding_network
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bidding_celery_worker
+    restart: unless-stopped
+    command: celery -A worker worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-BiddingSystem@2025}@postgres:5432/${DB_NAME:-bidding_db}
+      SYNC_DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-BiddingSystem@2025}@postgres:5432/${DB_NAME:-bidding_db}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      QWEN_API_KEY: ${QWEN_API_KEY}
+    volumes:
+      - ${HOST_DATA_UPLOADS:-./data/uploads}:/app/uploads
+      - ${HOST_DATA_LOGS:-./data/logs}:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bidding_network
+
+  # 前端
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # 构建时注入后端API地址（使用局域网IP）
+        VITE_API_URL: http://${HOST:-0.0.0.0}:${PORT:-8000}
+    container_name: bidding_frontend
+    restart: unless-stopped
+    environment:
+      # 运行时环境变量
+      VITE_API_URL: http://localhost:${PORT:-18888}
+    ports:
+      - "${FRONTEND_PORT:-13000}:5173"
+    depends_on:
+      - backend
+    networks:
+      - bidding_network
+    # 使用开发模式（跳过TypeScript严格检查）
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+networks:
+  bidding_network:
+    driver: bridge
+
+# 数据卷（已改为主机目录映射，无需声明）
+# volumes:
+#   postgres_data:
+#   redis_data:

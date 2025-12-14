@@ -25,19 +25,21 @@ parse_engine = ParseEngine()
 document_classifier = DocumentClassifier()
 settings = get_settings()
 
-# 使用配置系统中的上传路径
-UPLOAD_DIR = getattr(settings, 'upload_path', os.getenv('UPLOAD_DIR', './uploads'))
-TEMP_DIR = os.path.join(UPLOAD_DIR, 'temp')
-PARSED_DIR = os.path.join(UPLOAD_DIR, 'parsed')
-ARCHIVE_DIR = os.path.join(UPLOAD_DIR, 'archive')
+# 使用挂载的 SSD 存储路径
+UPLOAD_DIR = "/app/data/uploads"
+TEMP_DIR = "/app/data/uploads/temp"
+PARSED_DIR = "/app/data/parsed"
+ARCHIVE_DIR = "/app/data/archive"
 
 # 确保所有目录存在
 for directory in [UPLOAD_DIR, TEMP_DIR, PARSED_DIR, ARCHIVE_DIR]:
     os.makedirs(directory, exist_ok=True)
 
-logger.info(f"File upload directories initialized:")
+logger.info(f"File upload directories initialized (SSD Storage):")
+logger.info(f"  - Upload: {UPLOAD_DIR}")
 logger.info(f"  - Temp: {TEMP_DIR}")
 logger.info(f"  - Parsed: {PARSED_DIR}")
+logger.info(f"  - Archive: {ARCHIVE_DIR}")
 logger.info(f"  - Archive: {ARCHIVE_DIR}")
 
 # 确保uploaded_files表存在并包含sha256列（兼容旧schema）
@@ -467,13 +469,16 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
                 pass
             raise e
         
-        # 2. 解析文件
-        parsed_result = parse_engine.parse(temp_path, "other")
+        # 2. 解析文件（使用安全的文档类型，避免数据库约束冲突）
+        allowed_doc_types = {"tender", "proposal", "reference"}
+        default_doc_type = "reference"
+        parsed_result = parse_engine.parse(temp_path, default_doc_type, save_to_db=False)
         content = parsed_result.get('content', '')
         chapters = parsed_result.get('chapters', [])
         
         # 提取元数据
         metadata = {
+            "original_filename": filename,  # 保存原始文件名
             "chapters": [
                 {
                     "title": ch.get('title', ''),
@@ -512,14 +517,18 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
             metadata,
             content
         )
+
+        # 统一分类，确保符合 files.doc_type 检查约束
+        safe_category = category if category in allowed_doc_types else default_doc_type
         
         logger.info(f"  🏷️  分类: {category}, 语义名: {semantic_filename}")
         
         # 5. 生成归档路径
+        file_ext = os.path.splitext(filename)[1][1:] if '.' in filename else 'txt'
         now = datetime.now()
         year = now.year
         month = now.month
-        archive_dir = os.path.join(ARCHIVE_DIR, str(year), f"{month:02d}", category)
+        archive_dir = os.path.join(ARCHIVE_DIR, str(year), f"{month:02d}", safe_category)
         os.makedirs(archive_dir, exist_ok=True)
         
         archive_path = os.path.join(archive_dir, semantic_filename)
@@ -549,7 +558,7 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
                     semantic_filename = %s, archived_at = NOW(), file_path = %s
                 WHERE id = %s
                 """,
-                (FileStatus.ARCHIVED, archive_path, category, semantic_filename, archive_path, file_id)
+                (FileStatus.ARCHIVED, archive_path, safe_category, semantic_filename, archive_path, file_id)
             )
         except Exception as e:
             try:
@@ -562,16 +571,26 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
         try:
             db.execute(
                 """
-                INSERT INTO files (id, filename, filepath, doc_type, content, created_at)
-                VALUES (%s, %s, %s, %s, %s, NOW())
-                ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content
+                INSERT INTO files (id, filename, filepath, filetype, doc_type, content, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, filetype = EXCLUDED.filetype, doc_type = EXCLUDED.doc_type
                 """,
-                (file_id, semantic_filename, archive_path, category, content)
+                (file_id, semantic_filename, archive_path, file_ext, safe_category, content)
             )
             
             # 保存章节
+            logger.info(f"  📊 章节数据样例: {chapters[:2] if chapters else '无'}")
             for idx, chapter in enumerate(chapters):
                 chapter_id = str(uuid.uuid4())
+                
+                # 清理标题：去除目录点号和页码
+                raw_title = chapter.get('chapter_title', chapter.get('title', f'第{idx+1}章'))
+                # 去除"...数字"格式的页码标记
+                import re
+                clean_title = re.sub(r'[\.。\s]+\d+$', '', raw_title)  # 去除尾部的 "...123"
+                clean_title = re.sub(r'[\.。]{3,}', '', clean_title)  # 去除连续点号
+                clean_title = clean_title.strip()
+                
                 db.execute(
                     """
                     INSERT INTO chapters (
@@ -583,8 +602,8 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
                     (
                         chapter_id, file_id,
                         chapter.get('chapter_number', str(idx+1)),
-                        chapter.get('title', f'第{idx+1}章'),
-                        chapter.get('level', 1),
+                        clean_title,
+                        chapter.get('chapter_level', chapter.get('level', 1)),
                         chapter.get('content', ''),
                         idx + 1
                     )
@@ -611,7 +630,64 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
         except Exception as e:
             logger.warning(f"删除临时文件失败: {e}")
         
-        # 10. 更新状态为INDEXED（简化版，暂时跳过向量索引）
+        # 10. 向量化并建立知识库索引
+        try:
+            db.execute(
+                "UPDATE uploaded_files SET status = %s WHERE id = %s",
+                (FileStatus.INDEXING, file_id)
+            )
+        except Exception as e:
+            try:
+                db.conn.rollback()
+            except:
+                pass
+            logger.warning(f"更新索引中状态失败: {e}")
+        
+        # 提取知识库条目并向量化
+        try:
+            # 简化版：按章节建立向量索引
+            from openai import OpenAI
+            openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            
+            for idx, chapter in enumerate(chapters):
+                chapter_content = chapter.get('content', '')
+                if not chapter_content or len(chapter_content) < 50:
+                    continue
+                
+                # 分块（每1000字符一块）
+                chunks = [chapter_content[i:i+1000] for i in range(0, len(chapter_content), 1000)]
+                
+                for chunk_idx, chunk in enumerate(chunks[:5]):  # 限制每章最多5块
+                    try:
+                        # 生成向量
+                        response = openai_client.embeddings.create(
+                            model="text-embedding-3-small",
+                            input=chunk
+                        )
+                        embedding = response.data[0].embedding
+                        
+                        # 保存到vectors表
+                        vector_id = str(uuid.uuid4())
+                        db.execute(
+                            """
+                            INSERT INTO vectors (id, file_id, chunk_type, chunk, embedding, created_at)
+                            VALUES (%s, %s, %s, %s, %s, NOW())
+                            """,
+                            (vector_id, file_id, 'chapter', chunk, embedding)
+                        )
+                        
+                        logger.info(f"  🔍 向量索引已建立: 章节{idx+1} 块{chunk_idx+1}")
+                    except Exception as vec_err:
+                        logger.warning(f"向量化失败: {vec_err}")
+                        continue
+            
+            # 提取知识库条目
+            extract_knowledge_entries(file_id, semantic_filename, content)
+            
+        except Exception as index_err:
+            logger.warning(f"向量索引建立失败: {index_err}")
+        
+        # 11. 更新状态为INDEXED
         try:
             db.execute(
                 "UPDATE uploaded_files SET status = %s, indexed_at = NOW() WHERE id = %s",
@@ -652,7 +728,8 @@ def parse_and_store(file_id: str, save_path: str, filename: str, doc_type: str):
     """
     try:
         logger.info(f"Background parse start: {filename}")
-        parsed_result = parse_engine.parse(save_path, doc_type)
+        # 传递 file_id 以启用图片提取
+        parsed_result = parse_engine.parse(save_path, doc_type, file_id=file_id)
 
         # 保存解析结果到 files 表
         try:
@@ -807,6 +884,298 @@ async def get_file_list(
             "files": [],
             "total": 0
         }
+
+
+@router.get("/stats")
+async def get_file_stats():
+    """
+    获取文件统计信息
+    
+    Returns:
+        {
+            total_files: int,
+            total_size: int,
+            by_category: {...},
+            by_status: {...},
+            recent_uploads: [...]
+        }
+    """
+    try:
+        # 总文件数和总大小
+        stats_query = """
+            SELECT 
+                COUNT(*) as total_files,
+                COALESCE(SUM(file_size), 0) as total_size
+            FROM uploaded_files
+        """
+        stats = db.query_one(stats_query) or {"total_files": 0, "total_size": 0}
+        
+        # 按分类统计
+        category_stats = db.query("""
+            SELECT category, COUNT(*) as count
+            FROM uploaded_files
+            GROUP BY category
+        """) or []
+        
+        # 按状态统计
+        status_stats = db.query("""
+            SELECT status, COUNT(*) as count
+            FROM uploaded_files
+            GROUP BY status
+        """) or []
+        
+        # 最近上传
+        recent_uploads = db.query("""
+            SELECT filename, category, file_size, created_at
+            FROM uploaded_files
+            ORDER BY created_at DESC
+            LIMIT 5
+        """) or []
+        
+        return {
+            "status": "success",
+            "total_files": stats.get("total_files", 0),
+            "total_size": stats.get("total_size", 0),
+            "by_category": {item["category"]: item["count"] for item in category_stats},
+            "by_status": {item["status"]: item["count"] for item in status_stats},
+            "recent_uploads": [
+                {
+                    "filename": item["filename"],
+                    "category": item["category"],
+                    "size": item["file_size"],
+                    "uploadedAt": str(item["created_at"])
+                }
+                for item in recent_uploads
+            ]
+        }
+    except Exception as e:
+        logger.error(f"获取文件统计失败: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "total_files": 0,
+            "total_size": 0,
+            "by_category": {},
+            "by_status": {},
+            "recent_uploads": []
+        }
+
+
+@router.get("/database-details")
+async def get_database_details():
+    """
+    获取数据库统计信息
+    
+    Returns:
+        {
+            totalFiles: int,
+            totalSize: int,
+            storageUsed: float (MB),
+            knowledgeEntries: int,
+            lastUpdate: str
+        }
+    """
+    try:
+        # 统计文件数量
+        total_files_result = db.query_one("SELECT COUNT(*) as count FROM uploaded_files")
+        total_files = total_files_result['count'] if total_files_result else 0
+        
+        # 统计总大小
+        total_size_result = db.query_one("SELECT COALESCE(SUM(file_size), 0) as total FROM uploaded_files")
+        total_size = total_size_result['total'] if total_size_result else 0
+        storage_used_mb = round(total_size / (1024 * 1024), 2)
+        
+        # 统计知识库条目
+        try:
+            kb_result = db.query_one("SELECT COUNT(*) as count FROM files")
+            kb_count = kb_result['count'] if kb_result else 0
+        except:
+            kb_count = 0
+        
+        # 获取最后更新时间
+        last_update_result = db.query_one(
+            "SELECT MAX(created_at) as last_update FROM uploaded_files"
+        )
+        last_update = last_update_result['last_update'] if last_update_result and last_update_result['last_update'] else "未知"
+        if last_update != "未知":
+            last_update = str(last_update)
+        
+        return {
+            "totalFiles": total_files,
+            "totalSize": total_size,
+            "storageUsed": storage_used_mb,
+            "knowledgeEntries": kb_count,
+            "lastUpdate": last_update
+        }
+    except Exception as e:
+        logger.error(f"Error getting database details: {e}")
+        raise HTTPException(status_code=500, detail=f"获取数据库详情失败: {str(e)}")
+
+
+@router.get("/knowledge-base-entries")
+async def get_knowledge_base_entries():
+    """
+    获取知识库条目列表
+    
+    Returns:
+        List of knowledge base entries
+    """
+    try:
+        # 从files表查询（作为知识库），JOIN uploaded_files获取原始文件名
+        entries = db.query("""
+            SELECT 
+                f.id,
+                COALESCE(uf.filename, f.filename) as title,
+                f.doc_type as category,
+                COALESCE(uf.filename, f.filename) as "fileName",
+                f.created_at as "createdAt",
+                COUNT(c.id) as "chapterCount"
+            FROM files f
+            LEFT JOIN uploaded_files uf ON f.id = uf.id
+            LEFT JOIN chapters c ON f.id = c.file_id
+            GROUP BY f.id, f.filename, uf.filename, f.doc_type, f.created_at
+            ORDER BY f.created_at DESC
+            LIMIT 100
+        """)
+        
+        if entries:
+            formatted = []
+            for entry in entries:
+                formatted.append({
+                    "id": entry.get("id"),
+                    "title": entry.get("title"),
+                    "category": entry.get("category", "reference"),
+                    "fileName": entry.get("fileName"),
+                    "createdAt": str(entry.get("createdAt", "")),
+                    "chapterCount": entry.get("chapterCount", 0)
+                })
+            return formatted
+        
+        return []
+    except Exception as e:
+        logger.error(f"Error getting knowledge base entries: {e}", exc_info=True)
+        return []
+
+
+@router.get("/knowledge-base")
+async def get_knowledge_base_alias():
+    """兼容旧路径，返回知识库条目列表"""
+    return await get_knowledge_base_entries()
+
+
+@router.get("/document-indexes")
+async def get_document_indexes(fileId: Optional[str] = None):
+    """
+    获取文档索引列表
+    
+    Args:
+        fileId: 可选，指定文件ID（使用驼峰命名匹配前端）
+    
+    Returns:
+        List of document indexes with hierarchical structure
+    """
+    try:
+        def build_chapter_tree(chapter_rows):
+            """将平铺的章节列表构建为树结构"""
+            roots = []
+            stack = []  # 维护每一层的最后节点
+
+            for chapter in chapter_rows:
+                level = chapter.get('chapter_level') or 1
+                try:
+                    level_int = int(level)
+                except Exception:
+                    level_int = 1
+
+                node = {
+                    'number': chapter.get('chapter_number'),
+                    'title': chapter.get('chapter_title'),
+                    'level': level_int,
+                    'pageNum': chapter.get('position_order', 1),
+                    'children': []
+                }
+
+                # 确保栈深与当前level匹配
+                while stack and stack[-1]['level'] >= level_int:
+                    stack.pop()
+
+                if stack:
+                    stack[-1]['children'].append(node)
+                else:
+                    roots.append(node)
+
+                stack.append(node)
+
+            return roots
+
+        document_indexes = []
+        seen_files = set()  # 防止重复
+
+        # 查询文件和章节信息，JOIN uploaded_files 获取原始文件名
+        if fileId:
+            files = db.query_all(
+                """
+                SELECT f.*, uf.filename as original_filename
+                FROM files f
+                LEFT JOIN uploaded_files uf ON f.id = uf.id
+                WHERE f.id = %s
+                """,
+                (fileId,)
+            )
+        else:
+            # 按创建时间倒序返回最近的文件
+            files = db.query_all(
+                """
+                SELECT f.*, uf.filename as original_filename
+                FROM files f
+                LEFT JOIN uploaded_files uf ON f.id = uf.id
+                ORDER BY f.created_at DESC
+                LIMIT 50
+                """
+            )
+
+        for file in files:
+            file_id_str = str(file['id'])
+
+            # 跳过已处理的文件
+            if file_id_str in seen_files:
+                continue
+            seen_files.add(file_id_str)
+
+            # 查询章节
+            chapters = db.query_all(
+                """
+                SELECT chapter_number, chapter_title, chapter_level, position_order
+                FROM chapters
+                WHERE file_id = %s
+                ORDER BY position_order
+                """,
+                (file['id'],)
+            )
+
+            # 只返回有章节的文件
+            if not chapters:
+                continue
+
+            chapter_tree = build_chapter_tree(chapters)
+            
+            # 优先使用 JOIN 查询得到的 original_filename（来自 uploaded_files 表）
+            # 如果没有，则尝试从 metadata 中获取
+            # 最后才使用 files.filename（语义化文件名）
+            display_name = file.get('original_filename') or file['filename']
+            if not file.get('original_filename') and file.get('metadata') and isinstance(file['metadata'], dict):
+                display_name = file['metadata'].get('original_filename', file['filename'])
+
+            document_indexes.append({
+                'id': file['id'],
+                'fileName': display_name,
+                'chapters': chapter_tree
+            })
+        
+        return document_indexes
+        
+    except Exception as e:
+        logger.error(f"Error getting document indexes: {e}")
+        raise HTTPException(status_code=500, detail=f"获取文档索引失败: {str(e)}")
 
 
 @router.get("/{file_id}")
@@ -968,90 +1337,6 @@ async def download_uploaded_file(file_id: str):
     )
 
 
-@router.get("/database-details")
-async def get_database_details():
-    """
-    获取数据库统计信息
-    
-    Returns:
-        {
-            totalFiles: int,
-            totalSize: int,
-            storageUsed: float (MB),
-            knowledgeEntries: int,
-            lastUpdate: str
-        }
-    """
-    try:
-        # 统计文件数量
-        total_files_result = db.query_one("SELECT COUNT(*) as count FROM uploaded_files")
-        total_files = total_files_result['count'] if total_files_result else 0
-        
-        # 统计总大小
-        total_size_result = db.query_one("SELECT COALESCE(SUM(file_size), 0) as total FROM uploaded_files")
-        total_size = total_size_result['total'] if total_size_result else 0
-        storage_used_mb = round(total_size / (1024 * 1024), 2)
-        
-        # 统计知识库条目（假设有knowledge_base表）
-        try:
-            kb_result = db.query_one("SELECT COUNT(*) as count FROM knowledge_base")
-            kb_count = kb_result['count'] if kb_result else 0
-        except:
-            kb_count = 0
-        
-        # 获取最后更新时间
-        last_update_result = db.query_one(
-            "SELECT MAX(created_at) as last_update FROM uploaded_files"
-        )
-        last_update = last_update_result['last_update'] if last_update_result and last_update_result['last_update'] else "未知"
-        if last_update != "未知":
-            last_update = str(last_update)
-        
-        return {
-            "totalFiles": total_files,
-            "totalSize": total_size,
-            "storageUsed": storage_used_mb,
-            "knowledgeEntries": kb_count,
-            "lastUpdate": last_update
-        }
-    except Exception as e:
-        logger.error(f"Error getting database details: {e}")
-        raise HTTPException(status_code=500, detail=f"获取数据库详情失败: {str(e)}")
-
-
-@router.get("/knowledge-base-entries")
-async def get_knowledge_base_entries():
-    """
-    获取知识库条目列表
-    
-    Returns:
-        List of knowledge base entries with metadata
-    """
-    try:
-        # 查询知识库表（如果存在）
-        try:
-            entries = db.query_all("""
-                SELECT 
-                    id,
-                    title,
-                    content,
-                    category,
-                    file_name as fileName,
-                    created_at as createdAt
-                FROM knowledge_base
-                ORDER BY created_at DESC
-                LIMIT 100
-            """)
-            
-            return [dict(entry) for entry in entries] if entries else []
-        except:
-            # 如果knowledge_base表不存在，返回空列表
-            return []
-    except Exception as e:
-        logger.error(f"Error getting knowledge base entries: {e}")
-        raise HTTPException(status_code=500, detail=f"获取知识库条目失败: {str(e)}")
-
-
 class ProcessFilesRequest(BaseModel):
     fileIds: List[str]
 
@@ -1137,65 +1422,6 @@ async def process_files(
     except Exception as e:
         logger.error(f"Error processing files: {e}")
         raise HTTPException(status_code=500, detail=f"处理文件失败: {str(e)}")
-
-
-@router.get("/document-indexes")
-async def get_document_indexes(file_id: Optional[str] = None):
-    """
-    获取文档索引列表
-    
-    Args:
-        file_id: 可选，指定文件ID
-    
-    Returns:
-        List of document indexes
-    """
-    try:
-        # 查询文件和章节信息
-        if file_id:
-            files = db.query_all(
-                "SELECT * FROM files WHERE id = %s",
-                (file_id,)
-            )
-        else:
-            files = db.query_all(
-                "SELECT * FROM files ORDER BY created_at DESC LIMIT 50"
-            )
-        
-        document_indexes = []
-        
-        for file in files:
-            # 查询章节
-            chapters = db.query_all(
-                """
-                SELECT chapter_number, chapter_title, chapter_level, position_order
-                FROM chapters
-                WHERE file_id = %s
-                ORDER BY position_order
-                """,
-                (file['id'],)
-            )
-            
-            chapter_index = []
-            for chapter in chapters:
-                chapter_index.append({
-                    'title': chapter['chapter_title'],
-                    'level': chapter['chapter_level'],
-                    'pageNum': chapter.get('position_order', 1),
-                    'children': []
-                })
-            
-            document_indexes.append({
-                'id': file['id'],
-                'fileName': file['filename'],
-                'chapters': chapter_index
-            })
-        
-        return document_indexes
-        
-    except Exception as e:
-        logger.error(f"Error getting document indexes: {e}")
-        raise HTTPException(status_code=500, detail=f"获取文档索引失败: {str(e)}")
 
 
 def extract_knowledge_entries(file_id: str, filename: str, content: str):

@@ -1,0 +1,31 @@
+{
+  "name": "document-parser-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for document parsing (PDF/DOCX), chapter extraction, and image extraction",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "keywords": [
+    "mcp",
+    "document-parser",
+    "pdf-parser",
+    "docx-parser",
+    "chapter-extraction"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  },
+  "bin": {
+    "document-parser-mcp": "./dist/index.js"
+  }
+}

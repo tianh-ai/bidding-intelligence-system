@@ -74,13 +74,84 @@ const FileUpload: React.FC = () => {
   const [documentIndexes, setDocumentIndexes] = useState<DocumentIndex[]>([])
   const [selectedDoc, setSelectedDoc] = useState<DocumentIndex | null>(null)
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set())
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [collapsedDocs, setCollapsedDocs] = useState<Set<string>>(new Set()) // 折叠状态
+  const [expandedKeys, setExpandedKeys] = useState<Record<string, string[]>>({}) // 每个文档的展开keys
+  const [allExpanded, setAllExpanded] = useState<Record<string, boolean>>({}) // 每个文档是否全部展开
+  const [currentUploadIds, setCurrentUploadIds] = useState<string[]>([]) // 保存本次上传的文件ID，用于自动刷新完成后只加载这些文件
+  const [allDisplayFileIds, setAllDisplayFileIds] = useState<string[]>([]) // 保存所有要显示的文件ID（新上传+重复）
+  const [duplicateFilesList, setDuplicateFilesList] = useState<any[]>([]) // 保存重复文件的显示信息
 
-  // 初始加载数据
+  // 初始加载数据 - 每次打开页面重置所有状态（不自动加载已上传文件）
   useEffect(() => {
-    loadUploadedFiles()
-    loadDatabaseStats()
-    loadKnowledgeEntries()
+    // 1. 清空本地UI状态
+    setFileList([])
+    setSelectedDoc(null)
+    setProcessingFiles(new Set())
+    setAutoRefresh(false)
+    setUploadProgress(0)
+    setUploading(false)
+    setCollapsedDocs(new Set())
+    setExpandedKeys({})
+    setAllExpanded({})
+    
+    // 2. 清空数据列表（不显示之前的文件）
+    setUploadedFilesList([])
+    setKnowledgeEntries([])
+    setDocumentIndexes([])
+    setDatabaseStats(null)
+    
+    // 3. 不自动加载服务器数据，等待用户手动上传或刷新
+    // loadUploadedFiles()
+    // loadDatabaseStats()
+    // loadKnowledgeEntries()
+    // loadDocumentIndexes()
   }, [])
+
+  // 自动刷新机制：当有文件处理中时，每5秒刷新一次
+  useEffect(() => {
+    if (!autoRefresh) return
+    
+    const interval = setInterval(async () => {
+      console.log('自动刷新文件状态...')
+      
+      // 如果只有重复文件（没有新上传），直接停止刷新
+      if (currentUploadIds.length === 0) {
+        console.log('只有重复文件，无需自动刷新')
+        setAutoRefresh(false)
+        return
+      }
+      
+      // 查询新上传文件的状态，同时保留重复文件
+      const response = await fileAPI.getFiles()
+      const allFiles = response.data?.files || []
+      // 只保留本次上传的文件
+      const currentFiles = allFiles.filter((f: any) => currentUploadIds.includes(f.id))
+      
+      // 合并新上传文件和重复文件
+      const combinedFiles = [...currentFiles, ...duplicateFilesList]
+      setUploadedFilesList(combinedFiles)
+      
+      // 检查是否还有处理中的文件
+      const hasProcessing = currentFiles.some((f: any) => 
+        ['parsing', 'archiving', 'indexing'].includes(f.status)
+      )
+      
+      if (!hasProcessing) {
+        console.log('所有文件处理完成，停止自动刷新')
+        setAutoRefresh(false)
+        // 最后刷新一次数据 - 加载所有文件（新上传+重复）的数据
+        await loadDatabaseStats()
+        if (allDisplayFileIds.length > 0) {
+          await loadSpecificDocumentIndexes(allDisplayFileIds)
+          await loadKnowledgeEntriesForFiles(allDisplayFileIds)
+        }
+      }
+    }, 5000) // 每5秒刷新一次
+    
+    return () => clearInterval(interval)
+  }, [autoRefresh, currentUploadIds, allDisplayFileIds, duplicateFilesList]) // 依赖所有相关状态
+
 
   const loadUploadedFiles = async () => {
     try {
@@ -103,7 +174,62 @@ const FileUpload: React.FC = () => {
   const loadKnowledgeEntries = async () => {
     try {
       const response = await fileAPI.getKnowledgeBaseEntries()
+      console.log('获取知识库条目:', response.data)
       setKnowledgeEntries(response.data || [])
+    } catch (error) {
+      console.error('获取知识库条目失败:', error)
+    }
+  }
+
+  const loadDocumentIndexes = async () => {
+    try {
+      const response = await fileAPI.getDocumentIndexes()
+      console.log('获取文档索引:', response.data)
+      if (Array.isArray(response.data)) {
+        // 后端已经返回分组后的数据，直接使用
+        setDocumentIndexes(response.data)
+        // 默认折叠所有文档
+        const allDocIds = new Set(response.data.map((doc: any) => doc.id))
+        setCollapsedDocs(allDocIds)
+      }
+    } catch (error) {
+      console.error('获取文档索引失败:', error)
+    }
+  }
+
+  // 只加载特定文件的目录索引
+  const loadSpecificDocumentIndexes = async (fileIds: string[]) => {
+    try {
+      const indexes = []
+      for (const fileId of fileIds) {
+        const response = await fileAPI.getDocumentIndexes(fileId)
+        console.log(`获取文件 ${fileId} 的目录索引:`, response.data)
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          indexes.push(...response.data)
+        }
+      }
+      setDocumentIndexes(indexes)
+      // 默认折叠所有文档
+      const allDocIds = new Set(indexes.map((doc: any) => doc.id))
+      setCollapsedDocs(allDocIds)
+    } catch (error) {
+      console.error('获取特定文档索引失败:', error)
+    }
+  }
+
+  // 只加载特定文件的知识库条目
+  const loadKnowledgeEntriesForFiles = async (fileIds: string[]) => {
+    try {
+      const response = await fileAPI.getKnowledgeBaseEntries()
+      console.log('获取知识库条目:', response.data)
+      if (Array.isArray(response.data)) {
+        // 过滤出只属于本次上传文件的知识库条目
+        // 注意：需要根据实际数据结构调整过滤逻辑
+        const filtered = response.data.filter((entry: any) => 
+          fileIds.some(id => entry.id?.includes(id) || entry.fileName?.includes(id))
+        )
+        setKnowledgeEntries(filtered)
+      }
     } catch (error) {
       console.error('获取知识库条目失败:', error)
     }
@@ -128,11 +254,11 @@ const FileUpload: React.FC = () => {
       // Ant Design Upload的file有三种可能：
       // 1. file.originFileObj - 新上传的文件
       // 2. file本身就是File对象
-      const fileObj = file.originFileObj || file
+      const fileObj = file.originFileObj || (file as any)
       
       if (fileObj instanceof File || (fileObj && fileObj.size !== undefined)) {
         console.log('添加文件:', fileObj.name || file.name, '大小:', fileObj.size)
-        formData.append('files', fileObj)
+        formData.append('files', fileObj as Blob)
         hasValidFile = true
       } else {
         console.error('无效的文件对象:', file)
@@ -160,7 +286,7 @@ const FileUpload: React.FC = () => {
       
       // 显示上传结果
       if (result.uploaded && result.uploaded.length > 0) {
-        message.success(`成功上传 ${result.uploaded.length} 个文件`)
+        message.success(`成功上传 ${result.uploaded.length} 个文件，正在后台处理...`)
       }
       
       // 显示重复文件信息
@@ -176,33 +302,65 @@ const FileUpload: React.FC = () => {
         })
       }
       
-      if (result.duplicates && result.duplicates.length > 0) {
-        result.duplicates.forEach((f: any) => {
-          message.warning(`${f.name}: 文件已存在`)
-        })
-      }
-      
-      // 清空文件列表
+      // 清空文件列表，防止重复上传
       setFileList([])
       setUploadProgress(0)
 
-      // 启动文件处理流程
-      const uploadedFiles = result.uploaded || []
-      console.log('已上传文件列表:', uploadedFiles)
+      // 后端已通过 background_tasks 自动处理文件解析、归档和向量化
+      // 无需前端再次调用 processFiles
       
-      if (uploadedFiles.length > 0) {
-        // 处理文件生成知识库
-        await processUploadedFiles(uploadedFiles)
+      // 收集所有需要显示的文件ID：新上传的 + 重复的历史文件
+      const allFileIds: string[] = []
+      const displayFiles: any[] = []
+      const duplicates: any[] = []
+      
+      // 1. 处理新上传的文件
+      if (result.uploaded && result.uploaded.length > 0) {
+        const uploadedIds = result.uploaded.map((f: any) => f.id)
+        allFileIds.push(...uploadedIds)
+        displayFiles.push(...result.uploaded)
+        setCurrentUploadIds(uploadedIds)
       }
-
-      // 刷新所有数据
-      console.log('刷新页面数据...')
-      await Promise.all([
-        loadUploadedFiles(),
-        loadDatabaseStats(),
-        loadKnowledgeEntries(),
-      ])
-      console.log('数据刷新完成')
+      
+      // 2. 处理重复文件：显示历史文件并标记为重复
+      if (result.duplicates && result.duplicates.length > 0) {
+        result.duplicates.forEach((dup: any) => {
+          allFileIds.push(dup.existing_id)
+          // 添加重复文件到显示列表，使用历史文件的ID
+          const duplicateFile = {
+            id: dup.existing_id,
+            name: dup.existing_name || dup.name,
+            status: 'completed',
+            isDuplicate: true,  // 标记为重复
+            message: dup.message
+          }
+          displayFiles.push(duplicateFile)
+          duplicates.push(duplicateFile)
+        })
+      }
+      
+      // 保存所有文件ID和重复文件信息，供自动刷新使用
+      setAllDisplayFileIds(allFileIds)
+      setDuplicateFilesList(duplicates)
+      
+      // 显示所有文件（新上传 + 重复）
+      setUploadedFilesList(displayFiles)
+      
+      // 加载数据库统计
+      await loadDatabaseStats()
+      
+      // 加载所有文件的目录索引和知识库条目（包括重复文件）
+      if (allFileIds.length > 0) {
+        await loadSpecificDocumentIndexes(allFileIds)
+        await loadKnowledgeEntriesForFiles(allFileIds)
+      }
+      
+      // 启动自动刷新，监控处理状态
+      setAutoRefresh(true)
+      
+      console.log('数据刷新完成，已启动自动刷新')
+      
+      console.log('数据刷新完成，已启动自动刷新')
       
     } catch (error: any) {
       console.error('上传错误:', error)
@@ -239,33 +397,6 @@ const FileUpload: React.FC = () => {
       message.error(errorMsg)
     } finally {
       setUploading(false)
-    }
-  }
-
-  // 处理上传的文件：生成知识库和文档索引
-  const processUploadedFiles = async (files: FileInfo[]) => {
-    const fileIds = files.map(f => f.id)
-    console.log('准备处理文件IDs:', fileIds)
-    setProcessingFiles(new Set(fileIds))
-
-    try {
-      // 调用后端API启动文件处理
-      console.log('调用processFiles API...')
-      const response = await fileAPI.processFiles(fileIds)
-      console.log('处理响应:', response.data)
-      
-      if (response.data?.documentIndexes) {
-        setDocumentIndexes(response.data.documentIndexes)
-        console.log('已设置文档索引:', response.data.documentIndexes.length)
-      }
-
-      message.success('文件处理完成，已生成文档索引和知识库')
-    } catch (error: any) {
-      console.error('文件处理错误:', error)
-      const errorMsg = error.response?.data?.detail || error.message || '文件处理失败'
-      message.error(errorMsg)
-    } finally {
-      setProcessingFiles(new Set())
     }
   }
 
@@ -306,13 +437,34 @@ const FileUpload: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       ellipsis: true,
-      render: (text: string, record: FileInfo) => (
-        <Space>
-          <FileTextOutlined />
-          <span>{text}</span>
-          {processingFiles.has(record.id) && <Tag color="processing">处理中</Tag>}
-        </Space>
-      ),
+      render: (text: string, record: FileInfo) => {
+        const status = (record as any).status || 'uploaded'
+        const isDuplicate = (record as any).isDuplicate || false
+        const statusMap: Record<string, { text: string, color: string }> = {
+          'uploaded': { text: '已上传', color: 'default' },
+          'parsing': { text: '解析中', color: 'processing' },
+          'parsed': { text: '已解析', color: 'success' },
+          'archiving': { text: '归档中', color: 'processing' },
+          'archived': { text: '已归档', color: 'success' },
+          'indexing': { text: '索引中', color: 'processing' },
+          'indexed': { text: '已完成', color: 'success' },
+          'completed': { text: '已完成', color: 'success' },
+          'parse_failed': { text: '处理失败', color: 'error' },
+        }
+        const statusInfo = statusMap[status] || { text: status, color: 'default' }
+        
+        return (
+          <Space>
+            <FileTextOutlined />
+            <span>{text}</span>
+            {isDuplicate && <Tag color="warning">重复文件</Tag>}
+            {processingFiles.has(record.id) && <Tag color="processing">处理中</Tag>}
+            {!processingFiles.has(record.id) && status && !isDuplicate && (
+              <Tag color={statusInfo.color}>{statusInfo.text}</Tag>
+            )}
+          </Space>
+        )
+      },
     },
     {
       title: '大小',
@@ -367,17 +519,81 @@ const FileUpload: React.FC = () => {
   ]
 
   // 渲染文档目录树
-  const renderDocumentTree = (chapters: any[]) => {
-    const treeData = chapters.map((chapter, index) => ({
-      title: `${chapter.title} (第${chapter.pageNum}页)`,
-      key: `${index}`,
-      children: chapter.children?.map((child: any, childIndex: number) => ({
-        title: `${child.title} (第${child.pageNum}页)`,
-        key: `${index}-${childIndex}`,
-      })),
-    }))
+  const renderDocumentTree = (chapters: any[], docId: string) => {
+    if (!chapters || chapters.length === 0) {
+      return <div className="text-grok-textMuted text-sm">暂无章节数据</div>
+    }
 
-    return <Tree treeData={treeData} defaultExpandAll />
+    // 将扁平的章节列表转换为树形结构
+    const buildTree = (items: any[]): any[] => {
+      const tree: any[] = []
+      const levelStacks: any[][] = [[], [], [], [], []] // 支持5层
+      const allKeys: string[] = []
+
+      items.forEach((item, index) => {
+        // 兼容旧字段: level/number/title 和 chapter_level/chapter_number/chapter_title
+        const level = item.level ?? item.chapter_level ?? 1
+        const number = item.number ?? item.chapter_number ?? ''
+        const title = item.title ?? item.chapter_title ?? '未命名'
+        const key = `${docId}-${index}`
+        allKeys.push(key)
+        
+        const node = {
+          title: number ? `${number} ${title}` : title,
+          key,
+          children: []
+        }
+
+        if (level === 1) {
+          tree.push(node)
+          levelStacks[1] = [node]
+        } else {
+          // 找到父节点
+          const parentLevel = level - 1
+          if (levelStacks[parentLevel] && levelStacks[parentLevel].length > 0) {
+            const parent = levelStacks[parentLevel][levelStacks[parentLevel].length - 1]
+            parent.children.push(node)
+          } else {
+            // 没有找到父节点，加到根节点
+            tree.push(node)
+          }
+          levelStacks[level] = levelStacks[level] || []
+          levelStacks[level].push(node)
+        }
+      })
+
+      return tree
+    }
+
+    const treeData = buildTree(chapters)
+    const currentExpandedKeys = expandedKeys[docId] || []
+    
+    return (
+      <Tree 
+        treeData={treeData} 
+        expandedKeys={currentExpandedKeys}
+        onExpand={(keys) => {
+          setExpandedKeys(prev => ({ ...prev, [docId]: keys as string[] }))
+        }}
+        className="text-sm" 
+      />
+    )
+  }
+
+  // 全部展开/折叠函数
+  const handleToggleAll = (docId: string, chapters: any[]) => {
+    const isExpanded = allExpanded[docId]
+    
+    if (isExpanded) {
+      // 折叠全部
+      setExpandedKeys(prev => ({ ...prev, [docId]: [] }))
+      setAllExpanded(prev => ({ ...prev, [docId]: false }))
+    } else {
+      // 展开全部 - 生成所有keys
+      const allKeys = chapters.map((_, index) => `${docId}-${index}`)
+      setExpandedKeys(prev => ({ ...prev, [docId]: allKeys }))
+      setAllExpanded(prev => ({ ...prev, [docId]: true }))
+    }
   }
 
   return (
@@ -406,7 +622,7 @@ const FileUpload: React.FC = () => {
                 multiple
                 fileList={fileList}
                 onChange={({ fileList }) => setFileList(fileList)}
-                beforeUpload={(file) => {
+                beforeUpload={() => {
                   // 返回 false 阻止自动上传，但保留文件对象
                   return false
                 }}
@@ -549,25 +765,76 @@ const FileUpload: React.FC = () => {
                   children: (
                     <div className="space-y-4">
                       {documentIndexes.length > 0 ? (
-                        documentIndexes.map((doc) => (
-                          <Card
-                            key={doc.id}
-                            size="small"
-                            title={doc.fileName}
-                            extra={
-                              <Button
-                                type="link"
-                                size="small"
-                                icon={<EyeOutlined />}
-                                onClick={() => setSelectedDoc(doc)}
-                              >
-                                查看
-                              </Button>
-                            }
-                          >
-                            {renderDocumentTree(doc.chapters)}
-                          </Card>
-                        ))
+                        documentIndexes.map((doc) => {
+                          const isCollapsed = collapsedDocs.has(doc.id)
+                          return (
+                            <Card
+                              key={doc.id}
+                              size="small"
+                              title={doc.fileName}
+                              extra={
+                                <Space>
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    onClick={() => {
+                                      const newCollapsed = new Set(collapsedDocs)
+                                      if (isCollapsed) {
+                                        newCollapsed.delete(doc.id)
+                                      } else {
+                                        newCollapsed.add(doc.id)
+                                      }
+                                      setCollapsedDocs(newCollapsed)
+                                    }}
+                                  >
+                                    {isCollapsed ? '展开' : '折叠'}
+                                  </Button>
+                                  {!isCollapsed && (
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      onClick={() => handleToggleAll(doc.id, doc.chapters)}
+                                    >
+                                      {allExpanded[doc.id] ? '全部折叠' : '全部展开'}
+                                    </Button>
+                                  )}
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    icon={<EyeOutlined />}
+                                    onClick={() => setSelectedDoc(doc)}
+                                  >
+                                    查看
+                                  </Button>
+                                  <Popconfirm
+                                    title="确定删除此文件？"
+                                    onConfirm={async () => {
+                                      try {
+                                        await fileAPI.deleteFile(doc.id)
+                                        message.success('文件删除成功')
+                                        loadDocumentIndexes()
+                                        loadUploadedFiles()
+                                      } catch (error) {
+                                        message.error('删除文件失败')
+                                      }
+                                    }}
+                                  >
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      danger
+                                      icon={<DeleteOutlined />}
+                                    >
+                                      删除
+                                    </Button>
+                                  </Popconfirm>
+                                </Space>
+                              }
+                            >
+                              {!isCollapsed && renderDocumentTree(doc.chapters, doc.id)}
+                            </Card>
+                          )
+                        })
                       ) : (
                         <div className="text-center text-grok-textMuted py-8">
                           暂无文档索引，请上传文件后自动生成
@@ -638,7 +905,7 @@ const FileUpload: React.FC = () => {
               <Descriptions.Item label="文件名">{selectedDoc.fileName}</Descriptions.Item>
               <Descriptions.Item label="章节数">{selectedDoc.chapters.length}</Descriptions.Item>
             </Descriptions>
-            {renderDocumentTree(selectedDoc.chapters)}
+            {renderDocumentTree(selectedDoc.chapters, selectedDoc.id)}
           </div>
         )}
       </Modal>

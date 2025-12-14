@@ -49,7 +49,7 @@ const Login: React.FC = () => {
           <Form
             name="login"
             onFinish={onFinish}
-            autoComplete="off"
+            autoComplete="new-password"
             size="large"
           >
             <Form.Item
@@ -60,6 +60,7 @@ const Login: React.FC = () => {
                 prefix={<UserOutlined className="text-grok-textMuted" />}
                 placeholder="用户名"
                 className="grok-input"
+                autoComplete="off"
               />
             </Form.Item>
 
@@ -71,6 +72,7 @@ const Login: React.FC = () => {
                 prefix={<LockOutlined className="text-grok-textMuted" />}
                 placeholder="密码"
                 className="grok-input"
+                autoComplete="new-password"
               />
             </Form.Item>
 
@@ -87,7 +89,7 @@ const Login: React.FC = () => {
             </Form.Item>
 
             <div className="text-center text-grok-textMuted text-sm">
-              <p>默认管理员账号：admin / admin123</p>
+              <p>默认管理员账号：admin / bidding2024</p>
             </div>
           </Form>
         </Card>

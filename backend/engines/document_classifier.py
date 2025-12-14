@@ -204,6 +204,8 @@ class DocumentClassifier:
         Returns:
             str: 语义化文件名
         """
+        import hashlib
+        
         # 1. 提取扩展名
         _, ext = os.path.splitext(original_filename)
         
@@ -224,9 +226,13 @@ class DocumentClassifier:
         if version:
             parts.append(version)
         
-        semantic_name = "_".join(filter(None, parts)) + ext
+        semantic_name = "_".join(filter(None, parts))
         
-        # 7. 清理文件名（移除非法字符）
+        # 7. 添加唯一性后缀(防止重名): 原始文件名hash前6位
+        file_hash = hashlib.md5(original_filename.encode()).hexdigest()[:6]
+        semantic_name = f"{semantic_name}_{file_hash}{ext}"
+        
+        # 8. 清理文件名（移除非法字符）
         semantic_name = re.sub(r'[<>:"/\\|?*]', '', semantic_name)
         
         return semantic_name

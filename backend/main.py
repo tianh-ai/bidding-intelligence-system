@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv()
 
-from routers import files, learning, enhanced, auth, generation, metrics, llm, prompts, settings
+from routers import files, learning, enhanced, auth, generation, metrics, llm, prompts, settings, summary, process, financial, images
 
 # 创建应用实例
 app = FastAPI(
@@ -38,6 +38,10 @@ app.include_router(metrics.router, prefix="/api/metrics", tags=["统计与模型
 app.include_router(llm.router, tags=["LLM"])
 app.include_router(prompts.router, tags=["提示词"])
 app.include_router(settings.router, tags=["系统设置"])
+app.include_router(summary.router, prefix="/api", tags=["文档总结"])
+app.include_router(process.router, prefix="/api", tags=["文件处理"])
+app.include_router(financial.router, prefix="/api", tags=["财务报告"])
+app.include_router(images.router, prefix="/api", tags=["图片管理"])
 
 # 静态文件目录
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")

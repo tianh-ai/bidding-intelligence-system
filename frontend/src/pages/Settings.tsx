@@ -34,11 +34,18 @@ const Settings: React.FC = () => {
     try {
       const response = await settingsAPI.getUploadSettings()
       const settings = response.data
-      form.setFieldsValue({
-        upload_dir: settings.upload_dir,
-        max_file_size: settings.max_file_size,
-        allowed_extensions: settings.allowed_extensions.join(', ')
-      })
+      
+      // 确保正确设置表单初始值
+      const formData = {
+        upload_dir: settings.upload_dir || './uploads',
+        max_file_size: settings.max_file_size || 52428800,
+        allowed_extensions: Array.isArray(settings.allowed_extensions) 
+          ? settings.allowed_extensions.join(', ') 
+          : settings.allowed_extensions
+      }
+      
+      console.log('Loading settings:', formData)
+      form.setFieldsValue(formData)
     } catch (error: any) {
       console.error('Load settings error:', error)
       message.error('加载设置失败: ' + (error.response?.data?.detail || error.message))
@@ -75,7 +82,7 @@ const Settings: React.FC = () => {
       const result = await settingsAPI.testUploadPath(path)
       setTestResult(result)
       
-      if (result.valid) {
+      if ((result as any).valid) {
         message.success('路径可用')
       } else {
         message.error('路径不可用，请查看错误信息')
@@ -104,7 +111,7 @@ const Settings: React.FC = () => {
         allowed_extensions: extensions
       })
 
-      if (result.restart_required) {
+      if ((result as any).restart_required) {
         message.warning({
           content: '设置已保存，但需要重启后端服务才能生效',
           duration: 5

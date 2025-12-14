@@ -141,6 +141,14 @@ bidding-system/
 │   ├── worker.py                  # Celery Worker
 │   └── main.py                    # FastAPI入口
 │
+├── mcp-servers/                   # MCP 服务器（Model Context Protocol）
+│   ├── document-parser/          # 文档解析 MCP 服务器
+│   │   ├── src/index.ts          # TypeScript MCP 服务器
+│   │   ├── python/               # Python 解析后端
+│   │   ├── test/                 # 测试套件
+│   │   └── README.md             # 详细文档
+│   └── README.md                  # MCP 服务器索引
+│
 ├── tests/                         # 测试文件
 │   ├── test_expert_system.py
 │   ├── test_final_verification.py
@@ -449,6 +457,55 @@ OPENAI_TEMPERATURE=0.7                # 温度参数
 - 约束识别: <3秒
 - 内容生成: <3秒
 - **端到端**: <15秒
+
+---
+
+## 🔌 MCP 服务器集成
+
+本项目提供了 **Model Context Protocol (MCP)** 服务器，可以将文档解析功能集成到 Claude Desktop、VS Code 等支持 MCP 的 AI 客户端中。
+
+### 可用的 MCP 服务器
+
+#### Document Parser MCP Server
+
+**功能**: 提供标准化的文档解析能力
+
+**工具列表**:
+- `parse_document` - 完整文档解析（文本 + 章节 + 图片）
+- `extract_chapters` - 智能章节结构提取
+- `extract_images` - 图片提取和保存
+- `get_document_info` - 文档元数据获取
+
+**快速启动**:
+
+```bash
+# 1. 安装 MCP 服务器
+cd mcp-servers/document-parser
+./setup.sh
+
+# 2. 配置到 Claude Desktop
+# 编辑: ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "document-parser": {
+      "command": "node",
+      "args": ["/path/to/mcp-servers/document-parser/dist/index.js"]
+    }
+  }
+}
+
+# 3. 测试
+python test/test_parser.py
+```
+
+**详细文档**: [mcp-servers/README.md](mcp-servers/README.md) | [MCP_PARSER_SETUP.md](MCP_PARSER_SETUP.md)
+
+### MCP 架构优势
+
+- ✅ **标准化接口** - 遵循 MCP 协议，兼容多种客户端
+- ✅ **独立运行** - 无需启动主系统即可使用文档解析
+- ✅ **代码复用** - 直接使用 `backend/engines/` 的解析引擎
+- ✅ **易于集成** - 一键配置到 AI 助手中
 
 ---
 

@@ -84,7 +84,7 @@ const LogicLearning: React.FC = () => {
   const [learningLoading, setLearningLoading] = useState(false)
   const [uploadQueue, setUploadQueue] = useState<UploadFile[]>([])
   const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
+  const [_uploadProgress, setUploadProgress] = useState(0)
   const [logicRules, setLogicRules] = useState<LogicRule[]>([])
   const [tempLogicRules, setTempLogicRules] = useState<LogicRule[]>([])
   const [selectedLogic, setSelectedLogic] = useState<LogicRule | null>(null)
@@ -96,6 +96,19 @@ const LogicLearning: React.FC = () => {
   const [humanFeedback, setHumanFeedback] = useState('')
 
   useEffect(() => {
+    // 清除上次会话的临时状态
+    setSelectedFiles([])
+    setLearningTask(null)
+    setGenerationTask(null)
+    setUploadQueue([])
+    setUploadProgress(0)
+    setSelectedLogic(null)
+    setSelectedBucket(null)
+    setLogicEditor(initialEditorState)
+    setWorkspaceMessages([])
+    setHumanFeedback('')
+    
+    // 加载持久化数据
     loadAvailableFiles()
     loadLogicDatabase()
     loadBackups()
@@ -125,8 +138,8 @@ const LogicLearning: React.FC = () => {
   const loadLogicDatabase = async () => {
     try {
       const response = await learningAPI.getLogicDatabase()
-      setLogicRules(response.data?.permanent || [])
-      setTempLogicRules(response.data?.temporary || [])
+      setLogicRules(response.data?.chapterRules || [])
+      setTempLogicRules(response.data?.globalRules || [])
     } catch (error) {
       message.error('加载逻辑库失败')
     }
@@ -179,9 +192,21 @@ const LogicLearning: React.FC = () => {
     try {
       setLearningLoading(true)
       const response = await learningAPI.startLearning({ fileIds: selectedFiles })
-      setLearningTask(response.data)
+      const taskId = response.data?.taskId || response.data?.id
+      if (!taskId) {
+        message.error('任务创建返回缺少taskId')
+        return
+      }
+      setLearningTask({
+        id: taskId,
+        status: response.data?.status || 'processing',
+        filesCount: selectedFiles.length,
+        rulesLearned: response.data?.rulesLearned || 0,
+        progress: response.data?.progress || 0,
+        startedAt: new Date().toISOString(),
+      })
       appendWorkspaceMessage('system', '已创建学习任务，开始解析文件')
-      pollLearningStatus(response.data.id)
+      pollLearningStatus(taskId)
     } catch (error) {
       message.error('学习任务创建失败')
     } finally {
@@ -193,7 +218,16 @@ const LogicLearning: React.FC = () => {
     const interval = window.setInterval(async () => {
       try {
         const response = await learningAPI.getLearningStatus(taskId)
-        setLearningTask(response.data)
+        setLearningTask({
+          id: response.data?.taskId || taskId,
+          status: response.data?.status,
+          filesCount: (response.data?.fileIds || []).length,
+          rulesLearned: response.data?.result?.rulesLearned || 0,
+          progress: response.data?.progress || 0,
+          startedAt: response.data?.createdAt || new Date().toISOString(),
+          completedAt: response.data?.completedAt,
+          error: response.data?.error,
+        })
         if (response.data.status === 'completed') {
           clearInterval(interval)
           appendWorkspaceMessage('ai', '学习完成，逻辑已更新')
@@ -284,11 +318,22 @@ const LogicLearning: React.FC = () => {
       return
     }
     const formData = new FormData()
+    let hasValid = false
     uploadQueue.forEach((file) => {
-      if (file.originFileObj) {
-        formData.append('files', file.originFileObj)
+      const fileObj = (file as any).originFileObj || (file as any)
+      if (fileObj && fileObj.size !== undefined) {
+        formData.append('files', fileObj as Blob)
+        hasValid = true
       }
     })
+    if (!hasValid) {
+      message.error('没有有效的文件可上传')
+      return
+    }
+    // 添加必需的 uploader 参数
+    formData.append('uploader', user?.username || 'admin')
+    formData.append('duplicate_action', 'skip')
+    
     try {
       setUploading(true)
       await fileAPI.uploadFiles(formData, setUploadProgress)
@@ -297,7 +342,9 @@ const LogicLearning: React.FC = () => {
       setUploadProgress(0)
       loadAvailableFiles()
     } catch (error) {
-      message.error('上传失败')
+      // @ts-ignore
+      const detail = error?.response?.data?.detail || error?.message || '上传失败'
+      message.error(detail)
     } finally {
       setUploading(false)
     }
@@ -469,9 +516,11 @@ const LogicLearning: React.FC = () => {
           fileList={uploadQueue}
           onRemove={(file) => setUploadQueue((prev) => prev.filter((item) => item.uid !== file.uid))}
           className="mt-3 grok-dragger"
-          icon={<UploadOutlined />}
           showUploadList={{ showDownloadIcon: false }}
         >
+          <p className="ant-upload-drag-icon">
+            <UploadOutlined className="text-4xl text-grok-accent" />
+          </p>
           <p className="text-grok-textMuted">拖拽或点击上传文件，上传后自动可选</p>
         </Dragger>
         <Space className="mt-4">

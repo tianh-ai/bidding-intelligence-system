@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "document-parser": {
+      "command": "node",
+      "args": [
+        "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/mcp-document-parser/dist/index.js"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/backend"
+      }
+    }
+  }
+}

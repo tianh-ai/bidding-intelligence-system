@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, Input, Button, Select, Tabs, message, Spin } from 'antd'
 import { FileTextOutlined, LinkOutlined, FolderOutlined } from '@ant-design/icons'
-import { summaryAPI } from '@/services/api'
+import { fileAPI, summaryAPI } from '@/services/api'
 import ReactMarkdown from 'react-markdown'
 
 const FileSummary: React.FC = () => {
@@ -11,6 +11,32 @@ const FileSummary: React.FC = () => {
   const [folderPath, setFolderPath] = useState('')
   const [loading, setLoading] = useState(false)
   const [summary, setSummary] = useState('')
+  const [fileOptions, setFileOptions] = useState<{ label: string; value: string }[]>([])
+
+  useEffect(() => {
+    // 清除上次会话状态
+    setLinkInput('')
+    setFileId('')
+    setFolderPath('')
+    setSummary('')
+    setActiveTab('link')
+    
+    // 加载文件列表
+    loadFiles()
+  }, [])
+
+  const loadFiles = async () => {
+    try {
+      const res = await fileAPI.getFiles({ limit: 100 })
+      const options = (res.data?.files || []).map((f: any) => ({
+        label: f.name || f.filename || f.semanticName || '未命名文件',
+        value: f.id,
+      }))
+      setFileOptions(options)
+    } catch (error) {
+      message.error('加载文件列表失败')
+    }
+  }
 
   const handleSummarizeLink = async () => {
     if (!linkInput) {
@@ -23,8 +49,13 @@ const FileSummary: React.FC = () => {
       const response = await summaryAPI.summarizeLink(linkInput)
       setSummary(response.data.summary)
       message.success('总结完成！')
-    } catch (error: any) {
-      message.error(error.response?.data?.message || '总结失败')
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        // @ts-ignore
+        message.error(error.response?.data?.message || '总结失败')
+      } else {
+        message.error('总结失败')
+      }
     } finally {
       setLoading(false)
     }
@@ -110,6 +141,9 @@ const FileSummary: React.FC = () => {
             onChange={setFileId}
             className="w-full"
             size="large"
+            options={fileOptions}
+            showSearch
+            optionFilterProp="label"
           />
           <Button
             type="primary"

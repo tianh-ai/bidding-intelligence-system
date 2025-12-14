@@ -91,17 +91,29 @@ async def login(request: LoginRequest):
     """
     用户登录
     
-    简化版本：直接返回测试用户的 token
+    简化版本：使用固定的测试账户
     生产环境应验证数据库中的用户凭据
     """
-    # TODO: 验证用户名和密码（当前为演示模式，接受任何凭据）
+    # 验证用户名和密码
     if not request.username or not request.password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username and password are required"
         )
     
-    # 创建测试用户信息
+    # 固定的测试账户验证
+    VALID_CREDENTIALS = {
+        "admin": "bidding2024",
+        "user": "user2024"
+    }
+    
+    if request.username not in VALID_CREDENTIALS or VALID_CREDENTIALS[request.username] != request.password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+    
+    # 创建用户信息
     # 为admin用户分配管理员角色
     role = "admin" if request.username.lower() == "admin" else "user"
     

@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     QWEN_MODEL: str = "qwen-plus"
     
     # ========== File Upload Settings ==========
-    UPLOAD_DIR: str = "./uploads"  # 支持相对路径或绝对路径（如/data/uploads）
+    UPLOAD_DIR: str = "/app/data/uploads"  # Docker 挂载到 SSD
     MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".txt"]
     
@@ -132,7 +132,7 @@ class Settings(BaseSettings):
     
     # ========== Logging Settings ==========
     LOG_LEVEL: str = "INFO"
-    LOG_DIR: str = "logs"
+    LOG_DIR: str = "/app/data/logs"  # Docker 挂载到 SSD
     LOG_ROTATION: str = "00:00"  # Midnight
     LOG_RETENTION: str = "10 days"
     LOG_FORMAT: str = "json"  # json or text
