@@ -58,12 +58,13 @@ class EnhancedChapterExtractor:
             {'chapter_number': '1.1', 'chapter_title': '词语定义与解释', 'chapter_level': 3},
             ...
         ]
+        
+        注意: 每次调用都会重置内部状态，确保解析结果的一致性
         """
         lines = content.split('\n')
         chapters = []
-        seen_numbers = set()
         
-        # 状态追踪
+        # 状态追踪（这些状态变量不再影响主章节识别，只用于标记当前上下文）
         current_part = None  # 当前部分 (第一部分/第二部分/第三部分)
         in_appendix = False    # 是否进入附件部分
         in_main_chapters = False  # 是否进入主章节区域(第二/三部分)
@@ -126,8 +127,11 @@ class EnhancedChapterExtractor:
                     # 验证：主章节编号通常<30，且标题是中文
                     try:
                         num_val = int(number)
-                        # 只有进入第二/第三部分后，才开始识别主章节
-                        if in_main_chapters and num_val <= 30 and self._is_valid_title(title, level=1):
+                        # 主章节识别条件：
+                        # 1. 编号在合理范围内(1-30)
+                        # 2. 标题有效
+                        # 3. 标题不是纯中文数字（避免和"一、二、三"混淆）
+                        if num_val <= 30 and self._is_valid_title(title, level=1) and title[0] not in '一二三四五六七八九十':
                             chapter = {
                                 'chapter_number': number,
                                 'chapter_title': title,
@@ -201,13 +205,6 @@ class EnhancedChapterExtractor:
             
             # 添加章节
             if chapter:
-                number = chapter['chapter_number']
-                
-                # 防止重复
-                if number in seen_numbers:
-                    continue
-                
-                seen_numbers.add(number)
                 chapters.append(chapter)
         
         return chapters

@@ -6,6 +6,7 @@ All configuration is strongly typed and validated.
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import Optional
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -83,6 +84,12 @@ class Settings(BaseSettings):
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
     DEEPSEEK_MODEL: str = "deepseek-chat"
     
+    # Ollama Configuration (本地 LLM)
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_EMBEDDING_MODEL: str = "mxbai-embed-large"  # 高精度 embedding 模型 (1024维)
+    OLLAMA_CHAT_MODEL: str = "qwen2.5:latest"  # 可选的聊天模型
+    USE_OLLAMA_FOR_EMBEDDINGS: bool = True  # 默认使用 Ollama 生成 embeddings
+    
     # Qwen Configuration
     QWEN_API_KEY: str = "sk-17745e25a6b74f4994de3b8b42341b57"
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -92,6 +99,9 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "/app/data/uploads"  # Docker 挂载到 SSD
     MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".txt"]
+
+    # 图片存储目录（本地/容器均可覆盖）
+    IMAGE_STORAGE_DIR: str = "/app/data/images"
     
     @property
     def upload_path(self) -> str:
@@ -108,6 +118,27 @@ class Settings(BaseSettings):
         # 自动创建目录
         os.makedirs(upload_path, exist_ok=True)
         return upload_path
+
+    @property
+    def image_storage_path(self) -> str:
+        """获取图片存储目录，优先使用配置路径，不可写时回退到本地 data/images。"""
+        import os
+
+        def ensure_dir(path: str) -> str:
+            p = Path(path)
+            p.mkdir(parents=True, exist_ok=True)
+            return str(p)
+
+        # 绝对路径：直接尝试创建，失败则回退
+        if os.path.isabs(self.IMAGE_STORAGE_DIR):
+            try:
+                return ensure_dir(self.IMAGE_STORAGE_DIR)
+            except OSError:
+                pass  # 只在只读文件系统时回退
+        # 相对路径或回退路径：使用项目根目录下 data/images
+        base_dir = Path(__file__).resolve().parent.parent  # backend 目录
+        fallback = base_dir.parent / "data" / "images"
+        return ensure_dir(fallback)
     
     # ========== Cache Settings ==========
     CACHE_ENABLED: bool = True

@@ -294,7 +294,7 @@ docker-compose ps | grep redis
 ```bash
 # 开发环境
 cp .env.template backend/.env.development
-# 编辑: VITE_API_URL=http://localhost:8000
+# 编辑: VITE_API_URL=http://localhost:18888
 
 # 生产环境（Docker）
 cp .env.template backend/.env.production

@@ -1,0 +1,30 @@
+{
+  "name": "knowledge-base-mcp",
+  "version": "1.0.0",
+  "description": "Knowledge Base MCP Server for Bidding Intelligence System",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "knowledge-base-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "keywords": [
+    "mcp",
+    "knowledge-base",
+    "bidding",
+    "model-context-protocol"
+  ],
+  "author": "Bidding Intelligence System Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

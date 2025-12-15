@@ -1,5 +1,5 @@
 // API 基础配置
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:18888'
 
 // 权限级别
 export enum UserRole {

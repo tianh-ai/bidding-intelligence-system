@@ -25,11 +25,11 @@ parse_engine = ParseEngine()
 document_classifier = DocumentClassifier()
 settings = get_settings()
 
-# 使用挂载的 SSD 存储路径
-UPLOAD_DIR = "/app/data/uploads"
-TEMP_DIR = "/app/data/uploads/temp"
-PARSED_DIR = "/app/data/parsed"
-ARCHIVE_DIR = "/app/data/archive"
+# 使用配置的存储路径（支持本地和容器环境）
+UPLOAD_DIR = settings.upload_path
+TEMP_DIR = os.path.join(UPLOAD_DIR, "temp")
+PARSED_DIR = os.path.join(os.path.dirname(UPLOAD_DIR), "parsed")
+ARCHIVE_DIR = os.path.join(os.path.dirname(UPLOAD_DIR), "archive")
 
 # 确保所有目录存在
 for directory in [UPLOAD_DIR, TEMP_DIR, PARSED_DIR, ARCHIVE_DIR]:
@@ -173,6 +173,8 @@ async def upload_files(
                         "action": "skipped",
                         "existing_id": existing['id'],
                         "existing_name": existing.get('semantic_filename') or existing['filename'],
+                        "existing_size": existing.get('size', 0),
+                        "existing_uploaded_at": existing.get('created_at', '').isoformat() if existing.get('created_at') else None,
                         "message": f"文件已存在，上传于 {existing.get('created_at')}"
                     })
                     continue
@@ -333,6 +335,9 @@ async def upload_files(
                 "name": file.filename,
                 "size": file_size,
                 "existing_id": existing['id'],
+                "existing_name": existing.get('semantic_filename') or existing['filename'],
+                "existing_size": existing.get('size', file_size),
+                "existing_uploaded_at": existing.get('created_at', '').isoformat() if existing.get('created_at') else None,
                 "message": f"文件已存在，上传于 {existing.get('created_at')}",
                 "sha256": sha256
             })

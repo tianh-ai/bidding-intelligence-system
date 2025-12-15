@@ -17,7 +17,7 @@ echo "\n-- Ports (8000 backend, 5173 frontend) --" | tee -a "$OUTFILE"
 ss -ltnp | grep -E ':(8000|5173)' || true | tee -a "$OUTFILE"
 
 echo "\n-- Backend health check --" | tee -a "$OUTFILE"
-curl -sS http://localhost:8000/health 2>/dev/null | jq . 2>/dev/null || curl -sS http://localhost:8000/health 2>/dev/null | tee -a "$OUTFILE" || echo "No backend response" | tee -a "$OUTFILE"
+curl -sS http://localhost:18888/health 2>/dev/null | jq . 2>/dev/null || curl -sS http://localhost:18888/health 2>/dev/null | tee -a "$OUTFILE" || echo "No backend response" | tee -a "$OUTFILE"
 
 echo "\n-- Vite dev server check --" | tee -a "$OUTFILE"
 if lsof -i :5173 >/dev/null 2>&1; then
@@ -42,7 +42,7 @@ else
 fi
 
 echo "\n-- Test upload API (no file) --" | tee -a "$OUTFILE"
-curl -sS -X POST "http://localhost:8000/api/files/upload" -F "files=@/dev/null" 2>/dev/null | tee -a "$OUTFILE" || echo "upload endpoint not responding or rejected empty upload" | tee -a "$OUTFILE"
+curl -sS -X POST "http://localhost:18888/api/files/upload" -F "files=@/dev/null" 2>/dev/null | tee -a "$OUTFILE" || echo "upload endpoint not responding or rejected empty upload" | tee -a "$OUTFILE"
 
 echo "\n-- End of deep check: $(date)" | tee -a "$OUTFILE"
 

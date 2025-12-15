@@ -12,8 +12,8 @@
 ```bash
 ✅ PostgreSQL:  127.0.0.1:5433
 ✅ Redis:       127.0.0.1:6380  
-✅ Backend:     http://localhost:8000
-✅ Frontend:    http://localhost:5173
+✅ Backend:     http://localhost:18888
+✅ Frontend:    http://localhost:13000
 ```
 
 ### 验证方式
@@ -43,7 +43,7 @@ GET /api/auth/me
 
 **验证命令**:
 ```bash
-curl -X POST http://localhost:8000/api/auth/login \
+curl -X POST http://localhost:18888/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}'
 ```
@@ -90,7 +90,7 @@ POST   /api/llm/chat            # AI对话
 
 **测试结果**:
 ```bash
-$ curl http://localhost:8000/api/llm/models
+$ curl http://localhost:18888/api/llm/models
 {
   "models": [
     {
@@ -163,7 +163,7 @@ DELETE /api/prompts/templates/{id}         # 删除模板（软删除）
 
 **测试结果**:
 ```bash
-$ curl http://localhost:8000/api/prompts/templates
+$ curl http://localhost:18888/api/prompts/templates
 {
   "total": 4,
   "templates": [
@@ -174,7 +174,7 @@ $ curl http://localhost:8000/api/prompts/templates
   ]
 }
 
-$ curl http://localhost:8000/api/prompts/categories
+$ curl http://localhost:18888/api/prompts/categories
 {
   "categories": [
     {"name": "文档分析", "count": 1},
@@ -254,7 +254,7 @@ All tests passed! ✓
 **前端状态**: ⚠️ 可能存在UI渲染问题  
 
 **诊断步骤**:
-1. 打开 http://localhost:5173
+1. 打开 http://localhost:13000
 2. 按F12打开开发者工具
 3. 检查Network标签：`/api/llm/models` 请求状态
 4. 检查Console标签：是否有错误信息
@@ -469,8 +469,8 @@ cd /Users/haitian/github/superbase/bidding-intelligence-system
 ```
 ✅ PostgreSQL: 运行中
 ✅ Redis: 运行中
-✅ Backend: 运行中 (http://localhost:8000)
-✅ Frontend: 运行中 (http://localhost:5173)
+✅ Backend: 运行中 (http://localhost:18888)
+✅ Frontend: 运行中 (http://localhost:13000)
 ```
 
 ### 第二步: 运行后端测试
@@ -481,7 +481,7 @@ python3 comprehensive_test.py
 **预期结果**: 所有5项测试通过 ✅
 
 ### 第三步: 浏览器验证
-1. 打开浏览器访问 http://localhost:5173
+1. 打开浏览器访问 http://localhost:13000
 2. 使用 `admin` / `admin123` 登录
 3. 按 F12 打开开发者工具
 
@@ -515,7 +515,7 @@ python3 comprehensive_test.py
 ## 💡 下一步行动
 
 ### 立即行动 (优先级最高)
-1. **浏览器验证**: 在http://localhost:5173 验证前端功能
+1. **浏览器验证**: 在http://localhost:13000 验证前端功能
 2. **问题诊断**: 如果模型选择不显示，检查浏览器Console
 3. **收集信息**: 截图或记录错误信息
 

@@ -13,20 +13,14 @@ nano .env  # 填写 OPENAI_API_KEY, DEEPSEEK_API_KEY, QWEN_API_KEY
 docker-compose up -d
 
 # 3. 访问系统
-# 前端: http://localhost:5173
-# 后端: http://localhost:8888
+# 前端: http://localhost:13000
+# 后端: http://localhost:18888
 ```
 
-### 本地方式
+### 本地方式（已禁用）
 
 ```bash
-# 后端
-cd backend
-uvicorn main:app --host 0.0.0.0 --port 8888 --reload
-
-# 前端（新终端）
-cd frontend
-npm run dev
+本项目仅支持通过 Docker 对外提供服务（前端:13000 / 后端:18888）。
 ```
 
 ### 一键脚本
@@ -42,9 +36,9 @@ npm run dev
 
 | 服务 | 端口 | 访问地址 |
 |-----|------|---------|
-| **前端** | 5173 | http://localhost:5173 |
-| **后端** | 8888 | http://localhost:8888 |
-| **API 文档** | 8888 | http://localhost:8888/docs |
+| **前端** | 13000 | http://localhost:13000 |
+| **后端** | 18888 | http://localhost:18888 |
+| **API 文档** | 18888 | http://localhost:18888/docs |
 | **PostgreSQL** | 5433 | localhost:5433 |
 | **Redis** | 6380 | localhost:6380 |
 
@@ -83,7 +77,7 @@ docker-compose exec postgres psql -U postgres -d bidding_db
 ```
 bidding-intelligence-system/
 ├── backend/              # 后端（FastAPI + Python）
-│   ├── main.py          # 入口 - 端口 8888
+│   ├── main.py          # 入口 - 对外端口 18888
 │   ├── routers/         # API 路由
 │   ├── engines/         # 6个核心引擎
 │   └── Dockerfile       # Docker 配置

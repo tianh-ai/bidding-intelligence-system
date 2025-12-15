@@ -7,7 +7,12 @@
 ```
 mcp-servers/
 ├── README.md              # 本文件
-└── document-parser/       # 文档解析 MCP 服务器
+├── document-parser/       # 文档解析 MCP 服务器
+│   ├── src/               # TypeScript 源码
+│   ├── python/            # Python 后端
+│   ├── test/              # 测试套件
+│   └── README.md          # 详细文档
+└── knowledge-base/        # 知识库 MCP 服务器
     ├── src/               # TypeScript 源码
     ├── python/            # Python 后端
     ├── test/              # 测试套件
@@ -20,7 +25,8 @@ mcp-servers/
 
 **路径**: `document-parser/`  
 **功能**: 提供文档解析能力（PDF、DOCX）  
-**工具数量**: 4 个
+**工具数量**: 4 个  
+**调用方式**: AI 助手直接调用（独立运行）
 
 #### 核心功能
 - ✅ `parse_document` - 完整文档解析（文本 + 章节 + 图片）
@@ -38,6 +44,65 @@ cd document-parser
 
 ---
 
+### 2. Knowledge Base
+### Claude Desktop 配置
+
+编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "document-parser": {
+      "command": "node",
+      "args": [
+        "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/mcp-servers/document-parser/dist/index.js"
+      ]
+    },
+    "knowledge-base": {
+      "command": "node",
+      "args": [
+        "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/mcp-servers/knowledge-base/dist/index.js"
+      ]
+    }
+  }
+}
+```python
+from core.mcp_client import get_knowledge_base_client
+
+async def search():
+    client = get_knowledge_base_client()
+    results = await client.search_knowledge(
+        query="投标要求",
+        category="tender"
+    )
+    return results
+```
+
+#### HTTP API 端点
+```bash
+# 搜索知识
+curl -X POST http://localhost:18888/api/knowledge/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "投标", "category": "tender"}'
+
+# 获取统计
+curl http://localhost:18888/api/knowledge/statistics
+```
+
+#### 快速启动
+```bash
+cd knowledge-base
+./setup.sh
+
+# 测试集成
+chmod +x test/test_integration.sh
+./test/test_integration.sh
+```
+
+详细文档: [knowledge-base/README.md](./knowledge-base/README.md)
+
+---
+
 ## 🔧 通用配置
 
 ### Claude Desktop 配置
@@ -51,12 +116,6 @@ cd document-parser
       "command": "node",
       "args": [
         "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/mcp-servers/document-parser/dist/index.js"
-      ]
-    }
-  }
-}
-```
-
 ### VS Code 配置
 
 在项目根目录的 `.vscode/settings.json`:
@@ -65,6 +124,16 @@ cd document-parser
 {
   "mcp.servers": {
     "document-parser": {
+      "command": "node",
+      "args": ["./mcp-servers/document-parser/dist/index.js"]
+    },
+    "knowledge-base": {
+      "command": "node",
+      "args": ["./mcp-servers/knowledge-base/dist/index.js"]
+    }
+  }
+}
+``` "document-parser": {
       "command": "node",
       "args": ["./mcp-servers/document-parser/dist/index.js"]
     }

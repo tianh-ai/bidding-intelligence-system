@@ -63,9 +63,8 @@ npm run dev
 
 ### 访问地址
 
-- 前端: http://localhost:3000
-- 前端: http://localhost:5173  (✅ 请注意: 这是正确的访问地址)
-- 后端 API (由前端代理): http://localhost:8000
+- 前端: http://localhost:13000
+- 后端 API: http://localhost:18888
 
 ### 默认登录账号
 

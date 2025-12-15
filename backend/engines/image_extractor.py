@@ -12,14 +12,17 @@ from datetime import datetime
 from PIL import Image
 
 from core.logger import logger
+from core.config import get_settings
 from database import db
 
 
 class ImageExtractor:
     """图片提取器 - 保存原始图片，不进行OCR"""
     
-    def __init__(self, storage_base: str = "/app/data/images"):
-        self.storage_base = Path(storage_base)
+    def __init__(self, storage_base: Optional[str] = None):
+        settings = get_settings()
+        base_path = storage_base or settings.image_storage_path
+        self.storage_base = Path(base_path)
         self.storage_base.mkdir(parents=True, exist_ok=True)
         logger.info(f"图片存储目录: {self.storage_base}")
     

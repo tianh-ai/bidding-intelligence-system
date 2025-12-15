@@ -22,17 +22,17 @@ echo ""
 echo "🏥 健康检查:"
 
 # 后端
-if curl -s http://localhost:8000/health > /dev/null; then
-    echo "  ✅ 后端 API:    http://localhost:8000"
+if curl -s http://localhost:18888/health > /dev/null; then
+    echo "  ✅ 后端 API:    http://localhost:18888"
 else
-    echo "  ❌ 后端 API:    http://localhost:8000 (无响应)"
+    echo "  ❌ 后端 API:    http://localhost:18888 (无响应)"
 fi
 
 # 前端
-if curl -s http://localhost:5173 > /dev/null 2>&1; then
-    echo "  ✅ 前端界面:    http://localhost:5173"
+if curl -s http://localhost:13000 > /dev/null 2>&1; then
+    echo "  ✅ 前端界面:    http://localhost:13000"
 else
-    echo "  ⚠️  前端界面:    http://localhost:5173 (可能未启动)"
+    echo "  ⚠️  前端界面:    http://localhost:13000 (可能未启动)"
 fi
 
 # PostgreSQL

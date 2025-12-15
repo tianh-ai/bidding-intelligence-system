@@ -1,13 +1,13 @@
 # 浏览器验证清单
 
 ## 访问地址
-- **前端**: http://localhost:5173
-- **后端**: http://localhost:8000
+- **前端**: http://localhost:13000
+- **后端**: http://localhost:18888
 
 ## 验证步骤
 
 ### 1. 登录测试 ✓
-1. 打开 http://localhost:5173
+1. 打开 http://localhost:13000
 2. 使用以下凭据登录：
    - 用户名: `admin`
    - 密码: `admin123`

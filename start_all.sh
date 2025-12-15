@@ -15,7 +15,7 @@ fi
 echo "请选择启动模式："
 echo ""
 echo "1. 🐳 Docker 启动（推荐）"
-echo "2. 💻 本地启动（开发调试）"
+echo "2. 💻 本地启动（已禁用）"
 echo "3. 📊 查看系统信息"
 echo "4. 🛑 停止 Docker 服务"
 echo "5. ❌ 退出"
@@ -66,9 +66,9 @@ case $choice in
         docker-compose ps
         echo ""
         echo "🌐 访问地址:"
-        echo "   前端: http://localhost:5173"
-        echo "   后端: http://localhost:8888"
-        echo "   API文档: http://localhost:8888/docs"
+        echo "   前端: http://localhost:13000"
+        echo "   后端: http://localhost:18888"
+        echo "   API文档: http://localhost:18888/docs"
         echo ""
         echo "📝 查看日志: docker-compose logs -f"
         echo "🛑 停止服务: docker-compose down"
@@ -76,44 +76,10 @@ case $choice in
         
     2)
         echo ""
-        echo "═══════════════════════════════════════════════════════════"
-        echo "   💻 本地启动（开发模式）"
-        echo "═══════════════════════════════════════════════════════════"
-        echo ""
-        
-        # 启动后端（后台）
-        echo "📡 启动后端服务 (端口 8888)..."
-        cd backend
-        if [ ! -d "venv" ] && [ ! -d ".venv" ]; then
-            echo "⚠️  警告：未检测到虚拟环境，使用系统 Python"
-        fi
-        uvicorn main:app --host 0.0.0.0 --port 8888 --reload &
-        BACKEND_PID=$!
-        echo ""
-        echo "🌐 访问地址:"
-        echo "   前端: http://localhost:5173"
-        echo "   后端: http://localhost:8888"
-        echo "   API 文档: http://localhost:8888/docs"
-        echo ""
-        echo "🐳 Docker 方式:"
-        echo "   启动: docker-compose up -d"
-        echo "   停止: docker-compose down"
-        echo "   日志: docker-compose logs -f"
-        echo ""
-        echo "💻 本地方式:"
-        echo "   后端: cd backend && uvicorn main:app --port 8888 --reload"
-        echo "   前端: cd frontend && npm run dev"
-        echo ""
-        echo "🎨 启动前端服务 (端口 5173)..."
-        cd frontend
-        if [ ! -d "node_modules" ]; then
-            echo "📦 安装前端依赖..."
-            npm install
-        fi
-        npm run dev
-        
-        # 用户关闭前端后，也关闭后端
-        kill $BACKEND_PID 2>/dev/null
+        echo "❌ 本地启动已禁用（本项目强制使用 Docker）。"
+        echo "   启动：docker compose up -d"
+        echo "   访问：前端 http://localhost:13000  后端 http://localhost:18888"
+        exit 1
         ;;
         
     3)
@@ -127,9 +93,9 @@ case $choice in
         echo "   └── frontend/    (前端 - React + TypeScript)"
         echo ""
         echo "🌐 访问地址:"
-        echo "   前端: http://localhost:3000"
-        echo "   后端: http://localhost:8000"
-        echo "   API 文档: http://localhost:8000/docs"
+        echo "   前端: http://localhost:13000"
+        echo "   后端: http://localhost:18888"
+        echo "   API 文档: http://localhost:18888/docs"
         echo ""
         echo "🔑 默认登录:"
         echo "   用户名: admin"

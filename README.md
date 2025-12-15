@@ -249,15 +249,10 @@ psql -h localhost -U postgres -d bidding_db -f backend/db/ontology_schema.sql
 
 ### 4. 启动服务
 
-#### 开发环境
+#### Docker（唯一支持方式）
 
 ```bash
-# 启动FastAPI服务
-cd backend
-python main.py
-
-# 或使用uvicorn（支持热重载）
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+docker-compose up -d
 ```
 
 #### 启动Celery Worker（可选）
@@ -275,9 +270,10 @@ celery -A worker worker --loglevel=info
 
 访问以下URL验证服务：
 
-- **API文档**: http://localhost:8000/docs
-- **健康检查**: http://localhost:8000/health
-- **ReDoc文档**: http://localhost:8000/redoc
+- **前端**: http://localhost:13000
+- **API文档**: http://localhost:18888/docs
+- **健康检查**: http://localhost:18888/health
+- **ReDoc文档**: http://localhost:18888/redoc
 
 ---
 
@@ -335,7 +331,7 @@ python backend/test_new_modules_only.py
 ### 1. 上传标书文件
 
 ```bash
-curl -X POST "http://localhost:8000/api/files/upload" \
+curl -X POST "http://localhost:18888/api/files/upload" \
   -F "file=@tender_document.pdf" \
   -F "file_type=tender"
 ```
@@ -544,7 +540,7 @@ psql -h $DB_HOST -U postgres -d bidding_db -f backend/db/ontology_schema.sql
 gunicorn backend.main:app \
   --workers 4 \
   --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000
+  --bind 0.0.0.0:18888
 ```
 
 ### Nginx反向代理
@@ -555,7 +551,7 @@ server {
     server_name bidding.example.com;
 
     location / {
-        proxy_pass http://localhost:8000;
+      proxy_pass http://localhost:18888;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

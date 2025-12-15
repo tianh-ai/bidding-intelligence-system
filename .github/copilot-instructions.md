@@ -5,7 +5,59 @@ Concise, actionable guidance focused on discoverable patterns and critical conte
 
 # Copilot 使用说明
 
-**在做任何修改前，请先阅读本文件及 `README.md`、`backend/README.md`。**
+**⚠️ 代码保护警告：在做任何修改前，请先阅读以下文件：**
+
+1. **DOCKER_PRINCIPLES.md** - Docker使用原则（最优先！）
+2. **PORT_CONSISTENCY.md** - 端口一致性原则（强制！）
+3. **CODE_PROTECTION.md** - 代码保护规范（必读！）
+4. **FRONTEND_BEHAVIOR.md** - 前端行为规范
+5. **README.md** - 项目总览
+6. **backend/README.md** - 后端架构
+
+**核心规则（违反即失败）：**
+- 🔒 **不要修改已经验证工作正常的代码！**
+- 🐳 **所有服务必须通过Docker运行，严禁绕过Docker！**
+- 🔌 **所有配置必须使用端口18888，禁止8000！**
+- ✅ **每次修改前运行 `./check_ports.sh` 检查端口一致性！**
+
+## 🚨 端口配置（最常见错误！）
+
+**问题**: Copilot经常忘记端口配置，导致反复出错！
+
+**解决方案**:
+```bash
+# 1. 任何修改前，先检查端口
+./check_ports.sh
+
+# 2. 所有地方都用18888，不用8000！
+# ✅ 正确
+API_BASE = "http://localhost:18888"
+curl http://localhost:18888/health
+
+# ❌ 错误
+API_BASE = "http://localhost:<WRONG_PORT>"  # 不要用！
+curl http://localhost:<WRONG_PORT>/health   # 不要用！
+```
+
+**记忆口诀**: Docker统一端，18888不会错！
+
+详见: `PORT_CONSISTENCY.md`
+
+## 🔒 受保护的文件（禁止随意修改）
+
+以下文件已经过充分测试，除非有明确的bug报告，否则**禁止修改**：
+
+- `frontend/src/pages/FileUpload.tsx` - 文件上传核心逻辑
+- `frontend/src/services/api.ts` - API客户端配置
+- `backend/routers/files.py` - 文件上传API
+- `backend/agents/preprocessor.py` - 文档解析
+- `backend/engines/smart_router.py` - 智能路由（需要单元测试覆盖才能修改）
+
+修改前必须：
+1. 阅读 `CODE_PROTECTION.md`
+2. 运行 `python verify_knowledge_display.py` 验证当前功能
+3. 创建备份或新分支
+4. 修改后立即测试
 
 ## 核心架构
 
@@ -57,9 +109,8 @@ cp .env.example .env
 createdb bidding_db
 psql -h localhost -U postgres -d bidding_db -f backend/init_database.sql
 
-# 4. 启动服务
-cd backend && python main.py              # API (默认端口8000)
-cd backend && celery -A worker worker --loglevel=info  # Worker
+# 4. 启动服务（仅支持 Docker）
+docker-compose up -d
 ```
 
 ### 前端环境设置
@@ -69,21 +120,15 @@ cd frontend && npm install  # 或 pnpm install
 
 # 2. 环境变量
 cp .env.example .env
-# VITE_API_URL=http://localhost:8000
+# VITE_API_URL=http://localhost:18888
 
 # 3. 启动开发服务器
-npm run dev  # 或 ./start.sh (端口5173)
+npm run dev
 ```
 
 ### Docker 一键启动（推荐）
 ```bash
-docker-compose up -d  # 端口: postgres:5433, redis:6380, backend:8001, frontend:5173
-```. 启动服务
-cd backend && python main.py              # API (默认端口8000)
-cd backend && celery -A worker worker --loglevel=info  # Worker
-
-# Docker方式（推荐）
-docker-compose up -d                       # 端口: postgres:5433, redis:6380, backend:8001, frontend:5173
+docker-compose up -d  # 对外端口: backend:18888, frontend:13000
 ```
 
 ### 测试

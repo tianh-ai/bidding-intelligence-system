@@ -103,13 +103,13 @@ nano .env
 **本机验证**:
 ```bash
 # 访问前端
-open http://localhost:5173
+open http://localhost:13000
 
 # 访问API文档
-open http://localhost:8000/docs
+open http://localhost:18888/docs
 
 # 检查健康状态
-curl http://localhost:8000/health
+curl http://localhost:18888/health
 ```
 
 **局域网验证** (在其他设备上):
@@ -118,7 +118,7 @@ curl http://localhost:8000/health
 ifconfig | grep "inet " | grep -v 127.0.0.1
 
 # 在其他设备浏览器访问
-http://本机IP:5173
+http://本机IP:13000
 ```
 
 ### 步骤4: 配置防火墙（如需要）

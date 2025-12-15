@@ -1,0 +1,70 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "check_ports",
+			"type": "shell",
+			"command": "./check_ports.sh",
+			"args": [],
+			"isBackground": false
+		},
+		{
+			"label": "list_recent_files",
+			"type": "shell",
+			"command": "curl",
+			"args": [
+				"-sS",
+				"http://localhost:18888/api/files/list?limit=20"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "check_ports_tmp",
+			"type": "shell",
+			"command": "./check_ports.sh",
+			"isBackground": false
+		},
+		{
+			"label": "check-ports",
+			"type": "shell",
+			"command": "./check_ports.sh",
+			"args": [],
+			"isBackground": false
+		},
+		{
+			"label": "kb:migrate-verify-reindex-semantic",
+			"type": "shell",
+			"command": "set -euo pipefail\n\ncd /Users/tianmac/vscode/zhaobiao/bidding-intelligence-system\n\necho '== Step 1: apply migration (add embedding column + index) =='\ndocker exec -i bidding_postgres psql -U postgres -d bidding_db < backend/migrations/20251214_add_knowledge_base_embedding.sql\n\necho '== Step 2: verify embedding column type =='\ndocker exec -i bidding_postgres psql -U postgres -d bidding_db -c \"select column_name, udt_name from information_schema.columns where table_schema='public' and table_name='knowledge_base' and column_name='embedding';\"\n\necho '== Step 3: trigger reindex (batch_size=5) =='\ncurl -s http://localhost:18888/api/knowledge/reindex -H 'Content-Type: application/json' -d '{\"batch_size\":5}' | python3 -m json.tool || true\n\necho '== Step 4: backend logs grep (Ollama/embedding/MCP stderr) =='\ndocker compose logs --tail=200 backend | egrep -i 'ollama|embedding|mcp stderr|KnowledgeBaseMCP' || true\n\necho '== Step 5: semantic search (min_similarity=0.1) =='\ncurl -s http://localhost:18888/api/knowledge/search/semantic -H 'Content-Type: application/json' -d '{\"query\":\"项目经理资质要求\",\"limit\":10,\"min_similarity\":0.1}' | python3 -m json.tool || true\n"
+		},
+		{
+			"label": "kb:prove-mcp-ollama",
+			"type": "shell",
+			"command": "set -uo pipefail\n\ncd /Users/tianmac/vscode/zhaobiao/bidding-intelligence-system\n\necho '== Step 1: trigger reindex (batch_size=5) [optional] =='\ncurl -s http://localhost:18888/api/knowledge/reindex -H 'Content-Type: application/json' -d '{\"batch_size\":5}' | python3 -m json.tool || true\n\necho '== Step 2: backend logs grep (Ollama/embedding/MCP stderr/KnowledgeBaseMCP) =='\ndocker compose logs --tail=400 backend | egrep -i 'ollama|/api/embeddings|embedding|mcp stderr|KnowledgeBaseMCP' || true\n\necho '== Step 3: semantic search (min_similarity=0.1) =='\ncurl -s http://localhost:18888/api/knowledge/search/semantic -H 'Content-Type: application/json' -d '{\"query\":\"项目经理资质要求\",\"limit\":10,\"min_similarity\":0.1}' | python3 -m json.tool || true\n"
+		},
+		{
+			"label": "check-ports",
+			"type": "shell",
+			"command": "./check_ports.sh",
+			"isBackground": false
+		},
+		{
+			"label": "Restart backend + verify Ollama model",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -euo pipefail\ncd /Users/tianmac/vscode/zhaobiao/bidding-intelligence-system\n\necho \"== 1) check_ports ==\"\n./check_ports.sh\n\necho \"== 2) restart backend ==\"\ndocker compose restart backend\n\necho \"== 3) grep in container ==\"\ndocker compose exec -T backend sh -lc 'grep -n \"ollama-qwen3-8b\" -n /app/routers/llm.py || (echo \"NOT_FOUND\" && exit 2)'\n\necho \"== 4) curl models ==\"\ncurl -s http://localhost:18888/api/llm/models | sed -e 's/\\\\s\\+/ /g' | head -c 2000\necho\n"
+			]
+		},
+		{
+			"label": "Restart backend + verify Ollama model (terminal)",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -euo pipefail\ncd /Users/tianmac/vscode/zhaobiao/bidding-intelligence-system\n\necho \"== 1) check_ports ==\"\n./check_ports.sh\n\necho \"== 2) restart backend ==\"\ndocker compose restart backend\n\necho \"== 3) grep in container ==\"\ndocker compose exec -T backend sh -lc 'grep -n \"ollama-qwen3-8b\" -n /app/routers/llm.py || (echo \"NOT_FOUND\" && exit 2)'\n\necho \"== 4) curl models ==\"\ncurl -s http://localhost:18888/api/llm/models | head -c 2000\necho\n"
+			],
+			"isBackground": false
+		}
+	]
+}

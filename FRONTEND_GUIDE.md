@@ -88,15 +88,14 @@ npm install
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env 设置后端地址（默认 http://localhost:8000）
+# 编辑 .env 设置后端地址（默认 http://localhost:18888）
 
 # 3. 启动
 npm run dev
 ```
 
 ### 访问地址
-
-- **前端**: http://localhost:3000
+- **前端**: http://localhost:13000
 - **默认账号**: `admin` / `admin123`
 
 ---

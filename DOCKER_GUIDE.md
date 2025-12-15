@@ -67,9 +67,9 @@ docker-compose logs -f frontend
 
 #### 3. 访问系统
 
-- **前端**: http://localhost:5173
-- **后端 API**: http://localhost:8888
-- **API 文档**: http://localhost:8888/docs
+- **前端**: http://localhost:13000
+- **后端 API**: http://localhost:18888
+- **API 文档**: http://localhost:18888/docs
 
 默认账号：`admin` / `admin123`
 
@@ -85,39 +85,9 @@ docker-compose down -v
 
 ---
 
-## 💻 本地直接运行
+## 💻 本地直接运行（已禁用）
 
-### 前提条件
-
-- Python 3.10+
-- Node.js 18+
-- PostgreSQL 15+
-- Redis 7+
-
-### 启动步骤
-
-#### 1. 启动数据库和 Redis
-
-```bash
-# PostgreSQL（如果未安装）
-brew install postgresql@15
-brew services start postgresql@15
-
-# Redis
-brew install redis
-brew services start redis
-```
-
-#### 2. 配置后端
-
-```bash
-cd backend
-
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 安装依赖
+为保持端口与依赖一致性，本项目仅支持通过 Docker 运行。
 pip install -r requirements.txt
 
 # 配置环境变量
@@ -152,16 +122,16 @@ npm install
 
 # 配置环境变量
 cp .env.example .env
-# 确认 VITE_API_URL=http://localhost:8888
+# 确认 VITE_API_URL=http://localhost:18888
 
-# 启动前端（端口 5173）
-npm run dev
+# 本项目仅支持通过 Docker 对外提供服务（前端:13000 / 后端:18888）
+# 如需开发请在容器内进行，不建议本地直接 npm run dev
 ```
 
 #### 5. 访问
 
-- 前端: http://localhost:5173
-- 后端: http://localhost:8888
+- 前端: http://localhost:13000
+- 后端: http://localhost:18888
 
 ---
 
@@ -295,14 +265,14 @@ docker-compose up -d --build
 ```
 ┌─────────────────────────────────────────────────┐
 │                   用户浏览器                     │
-│            http://localhost:5173                │
+│            http://localhost:13000               │
 └──────────────────┬──────────────────────────────┘
                    │
                    ▼
 ┌─────────────────────────────────────────────────┐
 │              Frontend (React)                   │
 │          Container: bidding_frontend            │
-│              Port: 5173                         │
+│      Container Port: 5173 / Host Port: 13000     │
 └──────────────────┬──────────────────────────────┘
                    │
                    │ API Calls
@@ -310,7 +280,7 @@ docker-compose up -d --build
 ┌─────────────────────────────────────────────────┐
 │           Backend (FastAPI)                     │
 │          Container: bidding_backend             │
-│              Port: 8888                         │
+│      Container Port: 8000 / Host Port: 18888     │
 └─────────┬──────────────┬────────────────────────┘
           │              │
           ▼              ▼
@@ -338,13 +308,13 @@ server {
     server_name your-domain.com;
 
     location / {
-        proxy_pass http://localhost:5173;
+        proxy_pass http://localhost:13000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
 
     location /api {
-        proxy_pass http://localhost:8888;
+        proxy_pass http://localhost:18888;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -396,22 +366,18 @@ nano .env
 docker-compose up -d
 
 # 3. 访问
-浏览器打开: http://localhost:5173
+浏览器打开: http://localhost:13000
 ```
 
 ### 本地方式
 
 ```bash
-# 后端
-cd backend && uvicorn main:app --port 8888 --reload
-
-# 前端
-cd frontend && npm run dev
+本项目本地直跑（绕过 Docker）已禁用。
 ```
 
 **端口总结**:
-- 前端: **5173**
-- 后端: **8888**
+- 前端: **13000**
+- 后端: **18888**
 - 数据库: **5433**
 - Redis: **6380**
 

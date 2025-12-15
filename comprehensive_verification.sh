@@ -66,7 +66,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # 测试登录API
 echo -e "${YELLOW}[API]${NC} 测试登录API..."
-LOGIN_RESPONSE=$(curl -s -X POST http://localhost:8000/api/auth/login \
+LOGIN_RESPONSE=$(curl -s -X POST http://localhost:18888/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}')
 
@@ -97,7 +97,7 @@ TOTAL_TESTS=$((TOTAL_TESTS + 2))
 # 测试系统设置API
 if [ -n "$TOKEN" ]; then
     echo -e "${YELLOW}[API]${NC} 测试系统设置API..."
-    SETTINGS_RESPONSE=$(curl -s http://localhost:8000/api/settings/upload \
+    SETTINGS_RESPONSE=$(curl -s http://localhost:18888/api/settings/upload \
       -H "Authorization: Bearer $TOKEN")
     
     if echo "$SETTINGS_RESPONSE" | grep -q '"upload_dir"'; then
@@ -307,7 +307,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📝 浏览器验证步骤"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "1. 打开浏览器访问: http://localhost:5173"
+echo "1. 打开浏览器访问: http://localhost:13000"
 echo ""
 echo "2. 清除LocalStorage:"
 echo "   - 按F12打开DevTools"

@@ -89,7 +89,7 @@ cp .env.example .env
 编辑 `.env` 文件：
 
 ```env
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://localhost:18888
 ```
 
 ### 启动开发服务器
@@ -98,7 +98,7 @@ VITE_API_URL=http://localhost:8000
 npm run dev
 ```
 
-访问 http://localhost:3000
+访问 http://localhost:13000
 
 ### 默认账号
 

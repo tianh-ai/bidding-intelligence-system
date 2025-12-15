@@ -29,7 +29,7 @@ cd /tmp
 echo "测试文件内容-$(date)" > diagnostic_test.txt
 
 echo -n "上传测试文件... "
-response=$(curl -s -X POST http://localhost:8000/api/files/upload \
+response=$(curl -s -X POST http://localhost:18888/api/files/upload \
   -F "files=@diagnostic_test.txt" \
   -F "doc_type=other")
 
@@ -44,7 +44,7 @@ fi
 echo ""
 echo "4. 测试获取文件列表API"
 echo "---"
-file_count=$(curl -s http://localhost:8000/api/files | jq -r '.total')
+file_count=$(curl -s http://localhost:18888/api/files | jq -r '.total')
 echo "文件总数: $file_count"
 
 echo ""
@@ -79,7 +79,7 @@ EOF
 echo "文件大小: $(wc -c < /tmp/browser_test.txt) bytes"
 
 # 上传
-upload_result=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8000/api/files/upload \
+upload_result=$(curl -s -w "\n%{http_code}" -X POST http://localhost:18888/api/files/upload \
   -F "files=@/tmp/browser_test.txt" \
   -F "doc_type=other")
 
@@ -94,7 +94,7 @@ if [ "$http_code" = "200" ]; then
     # 验证文件在数据库中
     echo ""
     echo "验证数据库记录..."
-    file_in_db=$(curl -s http://localhost:8000/api/files | jq -r ".files[] | select(.id==\"$file_id\") | .name")
+    file_in_db=$(curl -s http://localhost:18888/api/files | jq -r ".files[] | select(.id==\"$file_id\") | .name")
     if [ "$file_in_db" = "browser_test.txt" ]; then
         echo -e "${GREEN}✓${NC} 文件已正确保存到数据库"
     else
@@ -119,7 +119,7 @@ fi
 echo ""
 echo "7. 前端URL测试"
 echo "---"
-echo "前端地址: http://localhost:5173"
+echo "前端地址: http://localhost:13000"
 echo "测试页面: file:///Users/haitian/github/superbase/bidding-intelligence-system/test_upload.html"
 
 echo ""
@@ -138,6 +138,6 @@ echo "  3. 文件存储: $(docker exec bidding_backend test -f "/app/uploads/${f
 echo ""
 echo "✅ 后端功能完全正常！"
 echo "⚠️  如果前端还有问题，请："
-echo "   1. 打开 http://localhost:5173"
+echo "   1. 打开 http://localhost:13000"
 echo "   2. 或打开 test_upload.html 直接测试"
 echo "   3. 按F12查看浏览器控制台错误"

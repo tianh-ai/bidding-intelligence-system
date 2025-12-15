@@ -7,6 +7,8 @@ WORKDIR /app
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
     gcc \
+    nodejs \
+    npm \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 

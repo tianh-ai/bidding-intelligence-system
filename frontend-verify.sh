@@ -30,17 +30,17 @@ check_service() {
 
 # 1. 检查后端服务
 echo "1. 检查后端服务..."
-check_service "后端API" "http://localhost:8000/health"
+check_service "后端API" "http://localhost:18888/health"
 echo ""
 
 # 2. 检查前端服务
 echo "2. 检查前端服务..."
-check_service "前端服务" "http://localhost:5173"
+check_service "前端服务" "http://localhost:13000"
 echo ""
 
 # 3. 检查LLM API
 echo "3. 检查LLM模型API..."
-response=$(curl -s http://localhost:8000/api/llm/models)
+response=$(curl -s http://localhost:18888/api/llm/models)
 if echo "$response" | grep -q "models"; then
     model_count=$(echo "$response" | grep -o "\"id\"" | wc -l | tr -d ' ')
     echo -e "${GREEN}✓${NC} LLM API正常 (返回 $model_count 个模型)"
@@ -53,7 +53,7 @@ echo ""
 
 # 4. 检查提示词API
 echo "4. 检查提示词API..."
-response=$(curl -s http://localhost:8000/api/prompts/templates)
+response=$(curl -s http://localhost:18888/api/prompts/templates)
 if echo "$response" | grep -q "templates"; then
     template_count=$(echo "$response" | grep -o "\"id\"" | wc -l | tr -d ' ')
     echo -e "${GREEN}✓${NC} 提示词API正常 (返回 $template_count 个模板)"
@@ -67,7 +67,7 @@ echo "========================================="
 echo "浏览器验证步骤"
 echo "========================================="
 echo ""
-echo "1. 打开浏览器访问: ${YELLOW}http://localhost:5173${NC}"
+echo "1. 打开浏览器访问: ${YELLOW}http://localhost:13000${NC}"
 echo ""
 echo "2. 使用以下凭据登录:"
 echo "   用户名: ${YELLOW}admin${NC}"

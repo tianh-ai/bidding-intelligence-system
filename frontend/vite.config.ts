@@ -16,7 +16,7 @@ export default defineConfig({
     strictPort: true, // 固定端口，不自动切换
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
+        target: process.env.VITE_API_URL || 'http://localhost:18888',
         changeOrigin: true,
       },
     },

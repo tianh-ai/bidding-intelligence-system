@@ -67,22 +67,23 @@ psql -h localhost -p 5432 -U postgres -d postgres -f init_database.sql
 ```
 
 或通过Supabase Studio执行SQL:
-- 访问 http://localhost:8000
+- 访问 http://localhost:13000
 - 进入SQL Editor
 - 粘贴 init_database.sql 内容并执行
 
 ### 4. 启动服务
 
-```bash
-python main.py
-```
+本项目后端要求通过 Docker 启动（对外端口固定为 `18888`）。
 
-服务将在 http://localhost:8000 启动。
+```bash
+cd ..
+docker-compose up -d
+```
 
 ### 5. 访问API文档
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Swagger UI: http://localhost:18888/docs
+- ReDoc: http://localhost:18888/redoc
 
 ## API接口
 

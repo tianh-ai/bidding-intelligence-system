@@ -211,6 +211,39 @@ export const userAPI = {
     axiosInstance.put(`/api/users/${id}/permissions`, { permissions }),
 }
 
+export const knowledgeAPI = {
+  // 列出知识条目（通过MCP）
+  listEntries: (data: {
+    file_id?: string
+    category?: string
+    limit?: number
+    offset?: number
+  }) =>
+    axiosInstance.post('/api/knowledge/entries/list', data),
+
+  // 搜索知识（通过MCP）
+  search: (data: {
+    query: string
+    category?: string
+    limit?: number
+    min_score?: number
+  }) =>
+    axiosInstance.post('/api/knowledge/search', data),
+
+  // 语义搜索（通过MCP）
+  semanticSearch: (data: {
+    query: string
+    category?: string
+    limit?: number
+    min_similarity?: number
+  }) =>
+    axiosInstance.post('/api/knowledge/search/semantic', data),
+
+  // 获取统计信息（通过MCP）
+  getStatistics: () =>
+    axiosInstance.get('/api/knowledge/statistics'),
+}
+
 export const settingsAPI = {
   // 获取上传设置
   getUploadSettings: () =>

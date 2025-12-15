@@ -204,12 +204,114 @@ class ParseEngine:
         from core.logger import logger
         
         doc = docx.Document(file_path)
-        text_parts = []
-        
-        # 1. 提取段落文本
-        for paragraph in doc.paragraphs:
-            if paragraph.text.strip():
-                text_parts.append(paragraph.text)
+
+        def _append_line(lines: List[str], line: str):
+            cleaned = (line or "").strip()
+            if not cleaned:
+                return
+            # 去除连续重复（常见于页眉/表格重复）
+            if lines and lines[-1] == cleaned:
+                return
+            lines.append(cleaned)
+
+        def _iter_block_items(document: "docx.Document"):
+            # 按文档原始顺序遍历段落/表格，避免“标题在表格里但被丢到最后”
+            try:
+                from docx.oxml.text.paragraph import CT_P
+                from docx.oxml.table import CT_Tbl
+                from docx.text.paragraph import Paragraph
+                from docx.table import Table
+            except Exception:
+                # 极端情况下回退到仅段落
+                for p in getattr(document, "paragraphs", []):
+                    yield p
+                return
+
+            body = document.element.body
+            for child in body.iterchildren():
+                if isinstance(child, CT_P):
+                    yield Paragraph(child, document)
+                elif isinstance(child, CT_Tbl):
+                    yield Table(child, document)
+
+        text_parts: List[str] = []
+
+        # 1. 提取页眉/页脚（只取一次，避免缺失“第X部分”等位于页眉的标题）
+        try:
+            for section in getattr(doc, "sections", []) or []:
+                header = getattr(section, "header", None)
+                if header:
+                    for p in getattr(header, "paragraphs", []) or []:
+                        _append_line(text_parts, p.text)
+                footer = getattr(section, "footer", None)
+                if footer:
+                    for p in getattr(footer, "paragraphs", []) or []:
+                        _append_line(text_parts, p.text)
+        except Exception:
+            pass
+
+        # 2. 提取正文（段落 + 表格，按出现顺序）
+        for block in _iter_block_items(doc):
+            # paragraph
+            if hasattr(block, "text") and not hasattr(block, "rows"):
+                _append_line(text_parts, getattr(block, "text", ""))
+                continue
+
+            # table
+            if hasattr(block, "rows"):
+                try:
+                    for row in block.rows:
+                        cell_texts: List[str] = []
+                        for cell in row.cells:
+                            parts = [p.text.strip() for p in getattr(cell, "paragraphs", []) or [] if p.text and p.text.strip()]
+                            cell_text = " ".join(parts).strip()
+                            if cell_text:
+                                cell_texts.append(cell_text)
+                        if cell_texts:
+                            _append_line(text_parts, "\t".join(cell_texts))
+                except Exception:
+                    # 表格解析失败不影响主流程
+                    continue
+
+        # 3. 兜底：补回可能位于“文本框/形状”等容器中的‘第X部分’标题
+        # python-docx 默认不解析文本框内容，但其文本通常仍在 OOXML 的 w:t 节点中。
+        try:
+            ns = getattr(doc.element, "nsmap", None) or {}
+            w_ns = ns.get("w") or "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            t_nodes = doc.element.xpath(".//w:t", namespaces={"w": w_ns})
+            ooxml_text = "".join([(getattr(n, "text", "") or "") for n in t_nodes])
+
+            # 从“商务文件”附近优先推断“第X部分”
+            part_hint = None
+            idx_biz = ooxml_text.find("商务文件")
+            if idx_biz != -1:
+                window = ooxml_text[max(0, idx_biz - 40): idx_biz + 10]
+                m = re.search(r"第\s*([一二三四五六七八九十]+)\s*部分", window)
+                if m:
+                    part_hint = f"第{m.group(1)}部分"
+
+            if not part_hint:
+                m = re.search(r"第\s*([一二三四五六七八九十]+)\s*部分", ooxml_text[:2000])
+                if m:
+                    part_hint = f"第{m.group(1)}部分"
+
+            if part_hint:
+                # 找到正文抽取的第一个非空行
+                first_idx = None
+                for i, ln in enumerate(text_parts):
+                    if ln and ln.strip():
+                        first_idx = i
+                        break
+
+                if first_idx is not None:
+                    first_line = text_parts[first_idx].strip()
+                    # 仅在“第X部分”缺失时补回，避免重复
+                    already_has_part = any(re.search(r"^第\s*[一二三四五六七八九十]+\s*部分", (ln or "").strip()) for ln in text_parts[: min(len(text_parts), first_idx + 5)])
+                    if (not already_has_part) and first_line == "商务文件":
+                        text_parts[first_idx] = f"{part_hint}   商务文件"
+        except Exception:
+            # 兜底失败不影响主流程
+            pass
         
         # 2. 提取并OCR识别嵌入的图片（如果启用OCR）
         use_ocr = os.getenv('OCR_ENABLED', 'true').lower() == 'true'

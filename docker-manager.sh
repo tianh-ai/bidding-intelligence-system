@@ -125,9 +125,9 @@ show_status() {
     
     echo ""
     print_info "服务访问地址："
-    echo "  🌐 前端: http://localhost:5173"
-    echo "  🔧 后端 API: http://localhost:8000"
-    echo "  📚 API 文档: http://localhost:8000/docs"
+    echo "  🌐 前端: http://localhost:13000"
+    echo "  🔧 后端 API: http://localhost:18888"
+    echo "  📚 API 文档: http://localhost:18888/docs"
     echo "  🗄️  PostgreSQL: localhost:5433"
     echo "  🔴 Redis: localhost:6380"
 }

@@ -70,10 +70,15 @@ services:
       # 应用配置
       PORT: 8000
       LOG_LEVEL: INFO
+
+      # Ollama（宿主机服务）
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      USE_OLLAMA_FOR_EMBEDDINGS: "true"
     ports:
       - "0.0.0.0:18888:8000"  # 避免与本地/其他服务冲突，外部使用18888
     volumes:
       - ./backend:/app
+      - ./mcp-servers:/app/mcp-servers:ro
       - /Volumes/ssd/bidding-data:/app/data  # 数据目录挂载到SSD
     depends_on:
       postgres:
@@ -100,8 +105,13 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-your-openai-key}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-your-deepseek-key}
       QWEN_API_KEY: ${QWEN_API_KEY:-your-qwen-key}
+
+      # Ollama（宿主机服务）
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      USE_OLLAMA_FOR_EMBEDDINGS: "true"
     volumes:
       - ./backend:/app
+      - ./mcp-servers:/app/mcp-servers:ro
       - /Volumes/ssd/bidding-data:/app/data  # 数据目录挂载到SSD
     depends_on:
       postgres:

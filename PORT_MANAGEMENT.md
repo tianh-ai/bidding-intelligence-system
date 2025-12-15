@@ -63,10 +63,8 @@ API_PORT=8000
 
 ### 2. 前端配置 `frontend/.env`
 ```bash
-# 根据启动模式选择：
-VITE_API_URL=http://localhost:18888   # Docker 后端
-# 或
-VITE_API_URL=http://localhost:8000    # 本地后端
+# 固定使用 Docker 对外后端端口
+VITE_API_URL=http://localhost:18888
 ```
 
 ### 3. Docker配置 `docker-compose.yml`
@@ -93,10 +91,10 @@ services:
 
 ```bash
 # 查看端口占用
-lsof -i :8000 -i :5173 -i :18888 -i :13000
+lsof -i :18888 -i :13000
 
 # 杀死占用进程
-lsof -ti :8000 | xargs kill -9
+lsof -ti :18888 | xargs kill -9
 
 # 查看 Docker 容器状态
 docker-compose ps
@@ -130,36 +128,10 @@ echo "   后端: http://localhost:18888/docs"
 ### `start-local.sh`
 ```bash
 #!/bin/bash
-# 使用本地开发环境
-echo "💻 启动本地开发环境..."
-
-# 1. 停止 Docker 前后端（保留数据库）
-docker-compose stop backend frontend
-
-# 2. 确保数据库运行
-docker-compose up -d postgres redis
-
-# 3. 检查端口
-if lsof -i :8000 >/dev/null 2>&1; then
-    echo "⚠️ 端口 8000 被占用，正在释放..."
-    lsof -ti :8000 | xargs kill -9
-fi
-
-# 4. 启动后端
-cd backend
-python3 main.py &
-BACKEND_PID=$!
-
-# 5. 等待后端启动
-sleep 3
-curl -s http://localhost:8000/health || echo "❌ 后端启动失败"
-
-# 6. 启动前端
-cd ../frontend
-npm run dev
-
-# 清理
-trap "kill $BACKEND_PID" EXIT
+# 已禁用：本项目强制 Docker 运行
+echo "❌ 已禁用本地启动（必须使用 Docker）。"
+echo "docker compose up -d"
+exit 1
 ```
 
 ## 当前问题修复步骤
