@@ -21,6 +21,7 @@ from core.logger import logger
 from core.config import get_settings
 from core.cache import cache  # 使用 Redis 缓存
 from core.kb_client import get_kb_client  # 知识库客户端
+from core.logic_db import logic_db  # 统一规则库
 from engines import ChapterLogicEngine, GlobalLogicEngine
 
 # 导入共享的数据模型
@@ -40,11 +41,12 @@ class LogicLearningMCP:
         self.db = db
         self.settings = get_settings()
         self.kb = get_kb_client()  # 知识库客户端
+        self.logic_db = logic_db  # 统一规则库
         self.chapter_engine = ChapterLogicEngine()
         self.global_engine = GlobalLogicEngine()
         # 使用 Redis 替代内存存储
         self.cache = cache
-        logger.info("LogicLearningMCP initialized with KBClient")
+        logger.info("LogicLearningMCP initialized with KB and LogicDB")
     
     def _run_async(self, coro):
         """同步运行异步方法的辅助函数"""
@@ -59,6 +61,46 @@ class LogicLearningMCP:
                 return asyncio.run(coro)
         except RuntimeError:
             return asyncio.run(coro)
+    
+    def _convert_engine_rule_to_unified_rule(
+        self,
+        engine_rule: Dict[str, Any],
+        rule_type: RuleType,
+        chapter_id: Optional[str] = None,
+        file_id: Optional[str] = None
+    ) -> Rule:
+        """
+        将引擎返回的规则字典转换为统一的Rule对象
+        
+        Args:
+            engine_rule: 引擎返回的规则字典
+            rule_type: 规则类型
+            chapter_id: 所属章节ID（可选）
+            file_id: 所属文件ID（可选）
+            
+        Returns:
+            Rule 对象
+        """
+        return Rule(
+            type=rule_type,
+            priority=RulePriority(engine_rule.get('priority', 'medium').lower()),
+            source=RuleSource.CHAPTER_LEARNING if chapter_id else RuleSource.GLOBAL_LEARNING,
+            condition=engine_rule.get('condition'),
+            condition_description=engine_rule.get('condition_description', engine_rule.get('description', '')),
+            description=engine_rule.get('description', ''),
+            pattern=str(engine_rule.get('pattern')) if engine_rule.get('pattern') else None,
+            action=engine_rule.get('action'),
+            action_description=engine_rule.get('action_description', ''),
+            constraints=engine_rule.get('constraints'),
+            scope={'chapter_id': chapter_id, 'file_id': file_id} if chapter_id or file_id else None,
+            confidence=float(engine_rule.get('confidence', 0.8)),
+            version=1,
+            tags=engine_rule.get('tags', []),
+            reference={'chapter_id': chapter_id, 'file_id': file_id, 'rule_origin': engine_rule.get('rule_type')},
+            fix_suggestion=engine_rule.get('fix_suggestion'),
+            examples=engine_rule.get('examples', []),
+            counter_examples=engine_rule.get('counter_examples', [])
+        )
 
     def start_learning(
         self,
@@ -204,13 +246,30 @@ class LogicLearningMCP:
                     custom_rules=None
                 )
                 
-                # 收集学习到的规则
-                for rule_type in ['structure_rules', 'content_rules', 'mandatory_rules', 'scoring_rules']:
-                    rules = chapter_package.get(rule_type, [])
-                    if rules:
-                        for rule in rules:
-                            rule['source'] = 'chapter_learning'
-                            rules_learned.append(rule)
+                # 收集学习到的规则并保存到统一规则库
+                for rule_type_key, rule_type_enum in [
+                    ('structure_rules', RuleType.STRUCTURE),
+                    ('content_rules', RuleType.CONTENT),
+                    ('mandatory_rules', RuleType.MANDATORY),
+                    ('scoring_rules', RuleType.SCORING)
+                ]:
+                    engine_rules = chapter_package.get(rule_type_key, [])
+                    if engine_rules:
+                        for engine_rule in engine_rules:
+                            # 转换为统一的Rule对象
+                            unified_rule = self._convert_engine_rule_to_unified_rule(
+                                engine_rule=engine_rule,
+                                rule_type=rule_type_enum,
+                                chapter_id=chapter_id
+                            )
+                            
+                            # 保存到logic_database
+                            try:
+                                rule_id = self.logic_db.add_rule(unified_rule)
+                                rules_learned.append(unified_rule)
+                                logger.info(f"Rule saved: {rule_id} ({rule_type_enum})")
+                            except Exception as e:
+                                logger.error(f"Failed to save rule: {e}", exc_info=True)
                 
                 logger.info(f"Chapter {chapter_id} learning completed: {len(chapter_package.get('structure_rules', []))} structure rules, "
                            f"{len(chapter_package.get('mandatory_rules', []))} mandatory rules, "
@@ -304,13 +363,30 @@ class LogicLearningMCP:
                     chapter_packages=chapter_packages
                 )
                 
-                # 收集学习到的规则
-                for rule_type in ['structure_rules', 'content_rules', 'consistency_rules', 'scoring_rules']:
-                    rules = global_package.get(rule_type, [])
-                    if rules:
-                        for rule in rules:
-                            rule['source'] = 'global_learning'
-                            rules_learned.append(rule)
+                # 收集学习到的规则并保存到数据库
+                for rule_type_key, rule_type_enum in [
+                    ('structure_rules', RuleType.STRUCTURE),
+                    ('content_rules', RuleType.CONTENT),
+                    ('consistency_rules', RuleType.CONSISTENCY),
+                    ('scoring_rules', RuleType.SCORING)
+                ]:
+                    engine_rules = global_package.get(rule_type_key, [])
+                    if engine_rules:
+                        for engine_rule in engine_rules:
+                            # 转换为统一Rule格式
+                            unified_rule = self._convert_engine_rule_to_unified_rule(
+                                engine_rule=engine_rule,
+                                rule_type=rule_type_enum,
+                                file_id=file_id
+                            )
+                            
+                            # 保存到logic_database
+                            try:
+                                rule_id = self.logic_db.add_rule(unified_rule)
+                                rules_learned.append(unified_rule)
+                                logger.info(f"Rule saved: {rule_id} ({rule_type_enum})")
+                            except Exception as e:
+                                logger.error(f"Failed to save rule to logic_db: {e}", exc_info=True)
                 
                 logger.info(f"File {file_id} global learning completed: "
                            f"{len(global_package.get('structure_rules', []))} structure rules, "
