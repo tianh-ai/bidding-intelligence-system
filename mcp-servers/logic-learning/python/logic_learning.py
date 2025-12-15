@@ -10,15 +10,23 @@ from typing import Dict, List, Optional, Any
 import json
 from datetime import datetime
 import uuid
+import asyncio
 
 # 导入主程序的数据库和配置
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / 'backend'))
+backend_path = str(Path(__file__).parent.parent.parent.parent / 'backend')
+sys.path.insert(0, backend_path)
 
 from database import db
 from core.logger import logger
 from core.config import get_settings
 from core.cache import cache  # 使用 Redis 缓存
+from core.kb_client import get_kb_client  # 知识库客户端
 from engines import ChapterLogicEngine, GlobalLogicEngine
+
+# 导入共享的数据模型
+shared_path = str(Path(__file__).parent.parent / 'shared')
+sys.path.insert(0, shared_path)
+from rule_schema import Rule, RuleType, RulePriority, RuleSource, RulePackage
 
 # 任务状态存储 TTL（24小时）
 TASK_STATUS_TTL = 86400
@@ -31,11 +39,26 @@ class LogicLearningMCP:
         """初始化逻辑学习服务"""
         self.db = db
         self.settings = get_settings()
+        self.kb = get_kb_client()  # 知识库客户端
         self.chapter_engine = ChapterLogicEngine()
         self.global_engine = GlobalLogicEngine()
         # 使用 Redis 替代内存存储
         self.cache = cache
-        logger.info("LogicLearningMCP initialized")
+        logger.info("LogicLearningMCP initialized with KBClient")
+    
+    def _run_async(self, coro):
+        """同步运行异步方法的辅助函数"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果事件循环已在运行，使用线程池
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    return pool.submit(asyncio.run, coro).result()
+            else:
+                return asyncio.run(coro)
+        except RuntimeError:
+            return asyncio.run(coro)
 
     def start_learning(
         self,
@@ -152,32 +175,22 @@ class LogicLearningMCP:
             task_status["message"] = f"Processing chapter {chapters_processed + 1}/{len(chapter_ids)}..."
             self.cache.set(f"learning_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
             
-            # 查询章节信息
-            chapter = self.db.query_one(
-                """
-                SELECT c.id, c.file_id, c.chapter_number, c.chapter_title as title, 
-                       c.content, c.chapter_level as level, c.position_order as order_index,
-                       f.filename, f.filetype as file_type
-                FROM chapters c
-                JOIN uploaded_files f ON c.file_id = f.id
-                WHERE c.id = %s
-                """,
-                (chapter_id,)
-            )
-            
-            if not chapter:
-                logger.warning(f"Chapter {chapter_id} not found")
+            # ===== 改为从知识库获取章节数据 =====
+            try:
+                chapter = self._run_async(self.kb.get_chapter(chapter_id))
+            except ValueError:
+                logger.warning(f"Chapter {chapter_id} not found in KB")
                 continue
             
             # 使用章节逻辑引擎学习章节（调用真实 learn_chapter 方法）
             try:
-                # 构建章节对象
+                # 构建章节对象（从 KB 数据）
                 tender_chapter = {
-                    'id': chapter['id'],
-                    'chapter_title': chapter.get('title', ''),
-                    'content': chapter.get('content', ''),
-                    'level': chapter.get('level', 1),
-                    'order_index': chapter.get('order_index', 0)
+                    'id': chapter.id,
+                    'chapter_title': chapter.chapter_title,
+                    'content': chapter.content,
+                    'level': chapter.chapter_level,
+                    'order_index': chapter.position_order
                 }
                 
                 # 由于单文件学习，proposal_chapter 与 tender_chapter 相同
@@ -234,27 +247,19 @@ class LogicLearningMCP:
             task_status["message"] = f"Processing file {files_processed + 1}/{len(file_ids)}..."
             self.cache.set(f"learning_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
             
-            # 查询文件信息
-            file_info = self.db.query_one(
-                "SELECT id, filename, filetype as file_type FROM uploaded_files WHERE id = %s",
-                (file_id,)
-            )
-            
-            if not file_info:
-                logger.warning(f"File {file_id} not found")
+            # ===== 改为从知识库获取文件数据 =====
+            try:
+                file_info = self._run_async(self.kb.get_file_metadata(file_id))
+            except ValueError:
+                logger.warning(f"File {file_id} not found in KB")
                 continue
             
-            # 查询文件所有章节
-            chapters = self.db.query(
-                """
-                SELECT id, file_id, chapter_number, chapter_title as title, 
-                       content, chapter_level as level, position_order as order_index
-                FROM chapters
-                WHERE file_id = %s
-                ORDER BY position_order ASC
-                """,
-                (file_id,)
-            )
+            try:
+                chapters = self._run_async(self.kb.get_chapters(file_id))
+            except ValueError:
+                logger.warning(f"No chapters found for file {file_id}")
+                files_processed += 1
+                continue
             
             if not chapters:
                 logger.warning(f"No chapters found for file {file_id}")
@@ -263,26 +268,34 @@ class LogicLearningMCP:
             
             # 使用全局逻辑引擎学习（调用真实 learn_global 方法）
             try:
-                # 构建文件对象
+                # 构建文件对象（从 KB 数据）
                 tender_doc = {
-                    'id': file_info['id'],
-                    'filename': file_info['filename'],
-                    'file_type': file_info['file_type'],
-                    'chapters': chapters
+                    'id': file_info.id,
+                    'filename': file_info.filename,
+                    'file_type': file_info.filetype,
+                    'chapters': [
+                        {
+                            'id': ch.id,
+                            'chapter_title': ch.chapter_title,
+                            'chapter_level': ch.chapter_level,
+                            'content': ch.content
+                        }
+                        for ch in chapters
+                    ]
                 }
                 
                 # 由于单文件学习，proposal_doc 与 tender_doc 相同
                 proposal_doc = tender_doc
                 
                 # 构建章节逻辑包
-                chapter_packages = []
-                for chapter in chapters:
-                    chapter_package = {
-                        'chapter_id': chapter['id'],
-                        'title': chapter['title'],
-                        'level': chapter['level']
+                chapter_packages = [
+                    {
+                        'chapter_id': ch.id,
+                        'title': ch.chapter_title,
+                        'level': ch.chapter_level
                     }
-                    chapter_packages.append(chapter_package)
+                    for ch in chapters
+                ]
                 
                 # 调用真实学习方法
                 global_package = self.global_engine.learn_global(

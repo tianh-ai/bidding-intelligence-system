@@ -336,15 +336,88 @@ CREATE TABLE IF NOT EXISTS training_tasks (
 
 CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks(status);
 
--- 23. 逻辑版本管理
+-- 23. 统一的逻辑规则数据库（所有MCP共享）
+-- 这个表取代了分散的 chapter_*_rules 和 global_*_rules 表
+-- 结构与 shared/rule_schema.py 中的 Rule 模型保持一致
+CREATE TABLE IF NOT EXISTS logic_database (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- 基本属性
+    rule_type text NOT NULL CHECK (rule_type IN (
+        'structure', 'content', 'mandatory', 'scoring', 
+        'consistency', 'formatting', 'terminology'
+    )),
+    priority text NOT NULL DEFAULT 'medium' CHECK (priority IN (
+        'critical', 'high', 'medium', 'low'
+    )),
+    source text NOT NULL CHECK (source IN (
+        'chapter_learning', 'global_learning', 'manual', 'report_analysis'
+    )),
+    
+    -- 规则条件
+    condition jsonb DEFAULT NULL,
+    condition_description text NOT NULL,
+    
+    -- 规则内容
+    description text NOT NULL,
+    pattern text DEFAULT NULL,
+    
+    -- 规则动作
+    action jsonb DEFAULT NULL,
+    action_description text NOT NULL,
+    
+    -- 定量约束
+    constraints jsonb DEFAULT NULL,
+    
+    -- 规则覆盖范围
+    scope jsonb DEFAULT NULL,
+    
+    -- 元数据
+    confidence decimal DEFAULT 1.0 CHECK (confidence >= 0.0 AND confidence <= 1.0),
+    version int DEFAULT 1,
+    tags text[] DEFAULT '{}',
+    
+    -- 参考信息（追踪规则来源）
+    reference jsonb DEFAULT NULL,
+    
+    -- 检查建议
+    fix_suggestion text DEFAULT NULL,
+    
+    -- 示例
+    examples text[] DEFAULT '{}',
+    counter_examples text[] DEFAULT '{}',
+    
+    -- 时间戳
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now(),
+    
+    -- 状态
+    is_active boolean DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_logic_database_type ON logic_database(rule_type);
+CREATE INDEX IF NOT EXISTS idx_logic_database_priority ON logic_database(priority);
+CREATE INDEX IF NOT EXISTS idx_logic_database_source ON logic_database(source);
+CREATE INDEX IF NOT EXISTS idx_logic_database_scope ON logic_database USING GIN(scope);
+CREATE INDEX IF NOT EXISTS idx_logic_database_created_at ON logic_database(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_logic_database_active ON logic_database(is_active);
+
+-- 24. 逻辑版本管理（用于规则集合的版本控制）
 CREATE TABLE IF NOT EXISTS logic_versions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     version_name text NOT NULL,
     tender_file_id uuid REFERENCES files(id),
     version_type text NOT NULL,
-    snapshot_data jsonb NOT NULL,
+    
+    -- 该版本包含的规则ID列表
+    rule_ids uuid[] NOT NULL DEFAULT '{}',
+    
+    -- 性能指标
     performance_metrics jsonb DEFAULT '{}',
+    
+    -- 版本状态
     is_active boolean DEFAULT FALSE,
+    
     created_at timestamptz DEFAULT now()
 );
 
