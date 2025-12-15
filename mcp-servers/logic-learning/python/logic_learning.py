@@ -54,6 +54,8 @@ class LogicLearningMCP:
         Returns:
             任务信息 {"task_id": str, "status": str}
         """
+        task_id = None
+        
         try:
             task_id = str(uuid.uuid4())
             
@@ -109,18 +111,21 @@ class LogicLearningMCP:
             
             return {
                 "task_id": task_id,
-                "status": "processing",
-                "message": "Learning task started",
+                "status": "completed",
+                "progress": 100,
+                "message": "Learning completed successfully",
+                "result": result,
             }
             
         except Exception as e:
             logger.error(f"Start learning failed: {e}", exc_info=True)
-            task_status = self.cache.get(f"learning_task:{task_id}") or {}
-            task_status.update({
-                "status": "failed",
-                "message": str(e),
-            })
-            self.cache.set(f"learning_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
+            if task_id:
+                task_status = self.cache.get(f"learning_task:{task_id}") or {}
+                task_status.update({
+                    "status": "failed",
+                    "message": str(e),
+                })
+                self.cache.set(f"learning_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
             raise
 
     def _chapter_learning(
@@ -138,21 +143,22 @@ class LogicLearningMCP:
         
         rules_learned = []
         chapters_processed = 0
+        
         for chapter_id in chapter_ids:
             # 更新进度
-            progress = int((chapters_processed / len(chapter_ids)) * 100)
+            progress = int((chapters_processed / len(chapter_ids)) * 100) if chapter_ids else 0
             task_status = self.cache.get(f"learning_task:{task_id}") or {}
             task_status["progress"] = progress
             task_status["message"] = f"Processing chapter {chapters_processed + 1}/{len(chapter_ids)}..."
             self.cache.set(f"learning_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
-            self.task_store[task_id]["message"] = f"Processing chapter {chapters_processed + 1}/{len(chapter_ids)}..."
             
             # 查询章节信息
             chapter = self.db.query_one(
                 """
-                SELECT c.id, c.file_id, c.title, c.content, c.level, c.order_index,
+                SELECT c.id, c.file_id, c.chapter_number, c.chapter_title as title, 
+                       c.content, c.chapter_level as level, c.position_order as order_index,
                        f.filename, f.filetype as file_type
-                FROM document_chapters c
+                FROM chapters c
                 JOIN uploaded_files f ON c.file_id = f.id
                 WHERE c.id = %s
                 """,
@@ -163,41 +169,43 @@ class LogicLearningMCP:
                 logger.warning(f"Chapter {chapter_id} not found")
                 continue
             
-            # 使用章节逻辑引擎提取规则
+            # 使用章节逻辑引擎学习章节（调用真实 learn_chapter 方法）
             try:
-                chapter_rules = self.chapter_engine.extract_chapter_logic(
-                    chapter_id=chapter["id"],
-                    chapter_title=chapter["title"],
-                    chapter_content=chapter["content"],
-                    file_type=chapter["file_type"]
+                # 构建章节对象
+                tender_chapter = {
+                    'id': chapter['id'],
+                    'chapter_title': chapter.get('title', ''),
+                    'content': chapter.get('content', ''),
+                    'level': chapter.get('level', 1),
+                    'order_index': chapter.get('order_index', 0)
+                }
+                
+                # 由于单文件学习，proposal_chapter 与 tender_chapter 相同
+                proposal_chapter = tender_chapter
+                
+                # 调用真实学习方法
+                chapter_package = self.chapter_engine.learn_chapter(
+                    tender_chapter=tender_chapter,
+                    proposal_chapter=proposal_chapter,
+                    boq=None,
+                    custom_rules=None
                 )
                 
-                # 保存规则到数据库
-                for rule in chapter_rules:
-                    self.db.execute(
-                        """
-                        INSERT INTO logic_database
-                        (rule_type, source_file_id, source_chapter_id, condition_text, 
-                         scoring_logic, importance, confidence, category, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                        """,
-                        (
-                            rule.get("rule_type", "chapter"),
-                            chapter["file_id"],
-                            chapter_id,
-                            rule.get("condition", ""),
-                            json.dumps(rule.get("scoring", {})),
-                            rule.get("importance", 50),
-                            rule.get("confidence", 0.8),
-                            rule.get("category", "general"),
-                        )
-                    )
+                # 收集学习到的规则
+                for rule_type in ['structure_rules', 'content_rules', 'mandatory_rules', 'scoring_rules']:
+                    rules = chapter_package.get(rule_type, [])
+                    if rules:
+                        for rule in rules:
+                            rule['source'] = 'chapter_learning'
+                            rules_learned.append(rule)
                 
-                rules_learned.extend(chapter_rules)
+                logger.info(f"Chapter {chapter_id} learning completed: {len(chapter_package.get('structure_rules', []))} structure rules, "
+                           f"{len(chapter_package.get('mandatory_rules', []))} mandatory rules, "
+                           f"{len(chapter_package.get('scoring_rules', []))} scoring rules")
                 chapters_processed += 1
                 
             except Exception as e:
-                logger.error(f"Failed to process chapter {chapter_id}: {e}")
+                logger.error(f"Failed to process chapter {chapter_id}: {e}", exc_info=True)
                 continue
         
         return {
@@ -216,11 +224,11 @@ class LogicLearningMCP:
         logger.info(f"Global learning: task={task_id}, files={file_ids}")
         
         rules_learned = []
-        files_processed = 0  # 初始化计数器
+        files_processed = 0
         
         for file_id in file_ids:
             # 更新进度
-            progress = int((files_processed / len(file_ids)) * 100)
+            progress = int((files_processed / len(file_ids)) * 100) if file_ids else 0
             task_status = self.cache.get(f"learning_task:{task_id}") or {}
             task_status["progress"] = progress
             task_status["message"] = f"Processing file {files_processed + 1}/{len(file_ids)}..."
@@ -236,45 +244,75 @@ class LogicLearningMCP:
                 logger.warning(f"File {file_id} not found")
                 continue
             
-            # 使用全局逻辑引擎提取规则
+            # 查询文件所有章节
+            chapters = self.db.query(
+                """
+                SELECT id, file_id, chapter_number, chapter_title as title, 
+                       content, chapter_level as level, position_order as order_index
+                FROM chapters
+                WHERE file_id = %s
+                ORDER BY position_order ASC
+                """,
+                (file_id,)
+            )
+            
+            if not chapters:
+                logger.warning(f"No chapters found for file {file_id}")
+                files_processed += 1
+                continue
+            
+            # 使用全局逻辑引擎学习（调用真实 learn_global 方法）
             try:
-                global_rules = self.global_engine.extract_global_logic(
-                    file_id=file_id,
-                    file_type=file_info["file_type"]
+                # 构建文件对象
+                tender_doc = {
+                    'id': file_info['id'],
+                    'filename': file_info['filename'],
+                    'file_type': file_info['file_type'],
+                    'chapters': chapters
+                }
+                
+                # 由于单文件学习，proposal_doc 与 tender_doc 相同
+                proposal_doc = tender_doc
+                
+                # 构建章节逻辑包
+                chapter_packages = []
+                for chapter in chapters:
+                    chapter_package = {
+                        'chapter_id': chapter['id'],
+                        'title': chapter['title'],
+                        'level': chapter['level']
+                    }
+                    chapter_packages.append(chapter_package)
+                
+                # 调用真实学习方法
+                global_package = self.global_engine.learn_global(
+                    tender_doc=tender_doc,
+                    proposal_doc=proposal_doc,
+                    chapter_packages=chapter_packages
                 )
                 
-                # 保存规则到数据库
-                for rule in global_rules:
-                    self.db.execute(
-                        """
-                        INSERT INTO logic_database
-                        (rule_type, source_file_id, condition_text, scoring_logic,
-                         importance, confidence, category, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-                        """,
-                        (
-                            rule.get("rule_type", "global"),
-                            file_id,
-                            rule.get("condition", ""),
-                            json.dumps(rule.get("scoring", {})),
-                            rule.get("importance", 50),
-                            rule.get("confidence", 0.8),
-                            rule.get("category", "general"),
-                        )
-                    )
+                # 收集学习到的规则
+                for rule_type in ['structure_rules', 'content_rules', 'consistency_rules', 'scoring_rules']:
+                    rules = global_package.get(rule_type, [])
+                    if rules:
+                        for rule in rules:
+                            rule['source'] = 'global_learning'
+                            rules_learned.append(rule)
                 
-                rules_learned.extend(global_rules)
+                logger.info(f"File {file_id} global learning completed: "
+                           f"{len(global_package.get('structure_rules', []))} structure rules, "
+                           f"{len(global_package.get('consistency_rules', []))} consistency rules")
                 files_processed += 1
                 
             except Exception as e:
-                logger.error(f"Failed to process file {file_id}: {e}")
+                logger.error(f"Failed to process file {file_id}: {e}", exc_info=True)
                 continue
         
         return {
             "rules_learned": len(rules_learned),
             "files_processed": files_processed,
             "learning_type": "global",
-            "rules": rules_learned[:10],  # 返回前10条规则作为示例
+            "rules": rules_learned[:20],  # 返回前20条规则作为示例
         }
 
     def get_learning_status(self, task_id: str) -> Dict[str, Any]:
