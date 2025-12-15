@@ -96,7 +96,12 @@ class CacheManager:
         Returns:
             True if successful, False otherwise
         """
-        if not self.is_available() or not settings.CACHE_ENABLED:
+        if not self.is_available():
+            logger.warning(f"Cache not available for key: {key}")
+            return False
+        
+        if not settings.CACHE_ENABLED:
+            logger.warning(f"Cache disabled for key: {key}")
             return False
         
         try:
@@ -107,6 +112,8 @@ class CacheManager:
             return True
         except Exception as e:
             logger.error(f"Cache set error for key {key}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def delete(self, pattern: str) -> int:

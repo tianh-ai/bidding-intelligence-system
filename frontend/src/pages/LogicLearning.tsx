@@ -58,6 +58,9 @@ interface LogicSnapshot {
 interface LearningFile {
   id: string
   name: string
+  status?: string
+  size?: number
+  uploadedAt?: string
 }
 
 interface LogicEditorState {
@@ -128,10 +131,20 @@ const LogicLearning: React.FC = () => {
 
   const loadAvailableFiles = async () => {
     try {
-      const response = await fileAPI.getFiles({ limit: 50 })
-      setAvailableFiles((response.data?.files || []).map((file: any) => ({ id: file.id, name: file.name })))
+      // 使用 /api/files/list 获取所有文件（不过滤状态）
+      const response = await fileAPI.getFiles({ limit: 100 })
+      const files = response.data?.files || []
+      setAvailableFiles(files.map((file: any) => ({
+        id: file.id,
+        name: file.name,
+        status: file.status || 'uploaded',
+        size: file.size || 0,
+        uploadedAt: file.uploadedAt || new Date().toISOString(),
+      })))
+      console.log(`加载了 ${files.length} 个文件（包含所有状态）`)
     } catch (error) {
       message.error('获取文件失败')
+      console.error('Load files error:', error)
     }
   }
 
@@ -189,14 +202,65 @@ const LogicLearning: React.FC = () => {
       message.warning('请选择至少一个文件')
       return
     }
-    try {
-      setLearningLoading(true)
-      const response = await learningAPI.startLearning({ fileIds: selectedFiles })
-      const taskId = response.data?.taskId || response.data?.id
-      if (!taskId) {
-        message.error('任务创建返回缺少taskId')
+    
+    // 检查选中文件的状态
+    const selectedFileObjects = availableFiles.filter(f => selectedFiles.includes(f.id))
+    const unarchivedFiles = selectedFileObjects.filter(f => 
+      !f.status || !['archived', 'indexed'].includes(f.status)
+    )
+    
+    // 如果有未存档文件，先触发处理
+    if (unarchivedFiles.length > 0) {
+      appendWorkspaceMessage('system', `检测到 ${unarchivedFiles.length} 个未存档文件，正在自动处理...`)
+      
+      try {
+        message.loading({ content: `正在处理 ${unarchivedFiles.length} 个未存档文件...`, key: 'process', duration: 0 })
+        
+        // 调用后端处理接口
+        const unarchivedIds = unarchivedFiles.map(f => f.id)
+        await fileAPI.processFiles(unarchivedIds)
+        
+        message.success({ content: `${unarchivedFiles.length} 个文件已提交处理，请等待处理完成`, key: 'process' })
+        appendWorkspaceMessage('ai', `文件处理已启动，包括解析、归档和索引`)
+        
+        // 刷新文件列表
+        await loadAvailableFiles()
+        
+        // 等待一段时间让处理进行
+        message.info('建议等待 10-30 秒后再开始学习，以确保文件处理完成')
+        return
+      } catch (error: any) {
+        const errorDetail = error?.response?.data?.detail || error?.message || '未知错误'
+        message.error({ content: `文件处理失败：${errorDetail}`, key: 'process' })
+        appendWorkspaceMessage('system', `❌ 文件处理失败：${errorDetail}`)
+        console.error('Process files error:', error)
         return
       }
+    }
+    
+    // 用户明确反馈
+    appendWorkspaceMessage('user', `选择了 ${selectedFiles.length} 个文件，开始学习...`)
+    
+    try {
+      setLearningLoading(true)
+      message.loading({ content: '正在创建学习任务...', key: 'learning', duration: 0 })
+      
+      // 调用新的 MCP 架构 API
+      const response = await learningAPI.startLearning({ 
+        fileIds: selectedFiles,
+        learningType: 'global',  // 默认全局学习
+        chapterIds: []  // 可扩展为章节级学习
+      })
+      const taskId = response.data?.taskId || response.data?.id
+      
+      if (!taskId) {
+        message.error({ content: '任务创建失败：返回数据缺少taskId', key: 'learning' })
+        appendWorkspaceMessage('system', '❌ 任务创建失败：返回数据格式错误')
+        return
+      }
+      
+      message.success({ content: `学习任务已创建 (ID: ${taskId.substring(0, 8)}...)`, key: 'learning' })
+      
       setLearningTask({
         id: taskId,
         status: response.data?.status || 'processing',
@@ -205,10 +269,14 @@ const LogicLearning: React.FC = () => {
         progress: response.data?.progress || 0,
         startedAt: new Date().toISOString(),
       })
-      appendWorkspaceMessage('system', '已创建学习任务，开始解析文件')
+      appendWorkspaceMessage('system', `✅ 学习任务已创建（MCP架构），开始解析 ${selectedFiles.length} 个文件`)
+      appendWorkspaceMessage('ai', '正在分析文档结构和逻辑规则（通过MCP服务）...')
       pollLearningStatus(taskId)
-    } catch (error) {
-      message.error('学习任务创建失败')
+    } catch (error: any) {
+      const errorDetail = error?.response?.data?.detail || error?.response?.data?.message || error?.message || '未知错误'
+      message.error({ content: `学习任务创建失败：${errorDetail}`, key: 'learning' })
+      appendWorkspaceMessage('system', `❌ 学习失败：${errorDetail}`)
+      console.error('Start learning error:', error)
     } finally {
       setLearningLoading(false)
     }
@@ -501,10 +569,34 @@ const LogicLearning: React.FC = () => {
         <Select
           mode="multiple"
           className="grok-input"
-          placeholder="选择已有文件"
+          style={{ width: '100%' }}
+          placeholder="选择已有文件（可搜索）"
+          showSearch
+          filterOption={(input, option) =>
+            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+          }
+          maxTagCount="responsive"
           value={selectedFiles}
           onChange={setSelectedFiles}
-          options={availableFiles.map((file) => ({ label: file.name, value: file.id }))}
+          options={availableFiles.map((file) => {
+            const statusMap: Record<string, { text: string; color: string }> = {
+              'uploaded': { text: '已上传', color: 'default' },
+              'parsing': { text: '解析中', color: 'processing' },
+              'parsed': { text: '已解析', color: 'success' },
+              'archiving': { text: '归档中', color: 'processing' },
+              'archived': { text: '已归档', color: 'success' },
+              'indexing': { text: '索引中', color: 'processing' },
+              'indexed': { text: '已完成', color: 'success' },
+            }
+            const status = file.status || 'uploaded'
+            const statusInfo = statusMap[status] || { text: status, color: 'default' }
+            return {
+              label: `${file.name} [${statusInfo.text}]`,
+              value: file.id,
+            }
+          })}
+          dropdownStyle={{ maxHeight: 400 }}
+          listHeight={320}
         />
         <Dragger
           accept=".pdf,.docx,.xlsx"

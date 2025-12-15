@@ -267,6 +267,7 @@ class KnowledgeBaseMCPClient(MCPClient):
 
 # 全局客户端实例
 _kb_client: Optional[KnowledgeBaseMCPClient] = None
+_ll_client: Optional['LogicLearningMCPClient'] = None
 
 
 def get_knowledge_base_client() -> KnowledgeBaseMCPClient:
@@ -275,6 +276,63 @@ def get_knowledge_base_client() -> KnowledgeBaseMCPClient:
     if _kb_client is None:
         _kb_client = KnowledgeBaseMCPClient()
     return _kb_client
+
+
+class LogicLearningMCPClient(MCPClient):
+    """逻辑学习 MCP 客户端"""
+    
+    def __init__(self):
+        """初始化逻辑学习 MCP 客户端"""
+        backend_root = Path(__file__).resolve().parent.parent
+        candidate_a = backend_root / "mcp-servers" / "logic-learning"
+        candidate_b = backend_root.parent / "mcp-servers" / "logic-learning"
+
+        mcp_base = candidate_a if candidate_a.exists() else candidate_b
+        server_path = mcp_base / "dist" / "index.js"
+        
+        super().__init__("logic-learning", str(server_path))
+    
+    async def start_learning(
+        self,
+        file_ids: List[str],
+        learning_type: str,
+        chapter_ids: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """启动学习任务"""
+        return await self.call_tool("start_learning", {
+            "file_ids": file_ids,
+            "learning_type": learning_type,
+            "chapter_ids": chapter_ids or []
+        })
+    
+    async def get_learning_status(self, task_id: str) -> Dict[str, Any]:
+        """查询学习任务状态"""
+        return await self.call_tool("get_learning_status", {
+            "task_id": task_id
+        })
+    
+    async def get_learning_result(self, task_id: str) -> Dict[str, Any]:
+        """获取学习任务结果"""
+        return await self.call_tool("get_learning_result", {
+            "task_id": task_id
+        })
+    
+    async def get_logic_database(
+        self,
+        category: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """获取逻辑数据库统计"""
+        return await self.call_tool("get_logic_database", {
+            "category": category
+        })
+
+
+def get_logic_learning_client() -> LogicLearningMCPClient:
+    """获取逻辑学习 MCP 客户端单例"""
+    global _ll_client
+    if _ll_client is None:
+        _ll_client = LogicLearningMCPClient()
+    return _ll_client
 
 
 # 使用示例

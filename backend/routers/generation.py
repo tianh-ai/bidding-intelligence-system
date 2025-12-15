@@ -64,9 +64,9 @@ async def generate_proposal(request: GenerateProposalRequest, background_tasks: 
     }
     
     # 存储到Redis，24小时过期
-    await cache.set(
+    cache.set(
         f"generation_task:{task_id}",
-        json.dumps(task_status),
+        task_status,
         ttl=TASK_STATUS_TTL
     )
     
@@ -99,12 +99,12 @@ async def get_generation_status(taskId: str):
             "result": {...}
         }
     """
-    task_json = await cache.get(f"generation_task:{taskId}")
+    task_json = cache.get(f"generation_task:{taskId}")
     
     if not task_json:
         raise HTTPException(status_code=404, detail=f"Generation task not found: {taskId}")
     
-    task = json.loads(task_json)
+    task = task_json
     return task
 
 
@@ -169,7 +169,7 @@ async def regenerate_proposal(taskId: str, request: RegenerateRequest, backgroun
         {"taskId": "new-uuid", "status": "processing"}
     """
     # 从Redis获取原始任务
-    original_task_json = await cache.get(f"generation_task:{taskId}")
+    original_task_json = cache.get(f"generation_task:{taskId}")
     
     if not original_task_json:
         raise HTTPException(status_code=404, detail=f"Original task not found: {taskId}")
@@ -192,7 +192,7 @@ async def regenerate_proposal(taskId: str, request: RegenerateRequest, backgroun
     }
     
     # 存储到Redis
-    await cache.set(
+    cache.set(
         f"generation_task:{new_task_id}",
         json.dumps(new_task_status),
         ttl=TASK_STATUS_TTL
@@ -235,12 +235,12 @@ async def process_generation_task(task_id: str, request: GenerateProposalRequest
     """
     try:
         # 更新进度到Redis
-        task_json = await cache.get(f"generation_task:{task_id}")
+        task_json = cache.get(f"generation_task:{task_id}")
         if task_json:
-            task_status = json.loads(task_json)
+            task_status = task_json
             task_status["progress"] = 20
             task_status["message"] = "Loading tender document..."
-            await cache.set(f"generation_task:{task_id}", json.dumps(task_status), ttl=TASK_STATUS_TTL)
+            cache.set(f"generation_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
         
         # TODO: 实际的生成逻辑
         # 1. 加载招标文件
@@ -253,28 +253,28 @@ async def process_generation_task(task_id: str, request: GenerateProposalRequest
         import asyncio
         await asyncio.sleep(1)
         
-        task_json = await cache.get(f"generation_task:{task_id}")
+        task_json = cache.get(f"generation_task:{task_id}")
         if task_json:
-            task_status = json.loads(task_json)
+            task_status = task_json
             task_status["progress"] = 50
             task_status["message"] = "Generating content..."
-            await cache.set(f"generation_task:{task_id}", json.dumps(task_status), ttl=TASK_STATUS_TTL)
+            cache.set(f"generation_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
         
         await asyncio.sleep(2)
         
-        task_json = await cache.get(f"generation_task:{task_id}")
+        task_json = cache.get(f"generation_task:{task_id}")
         if task_json:
-            task_status = json.loads(task_json)
+            task_status = task_json
             task_status["progress"] = 80
             task_status["message"] = "Validating output..."
-            await cache.set(f"generation_task:{task_id}", json.dumps(task_status), ttl=TASK_STATUS_TTL)
+            cache.set(f"generation_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
         
         await asyncio.sleep(1)
         
         # 更新为完成状态
-        task_json = await cache.get(f"generation_task:{task_id}")
+        task_json = cache.get(f"generation_task:{task_id}")
         if task_json:
-            task_status = json.loads(task_json)
+            task_status = task_json
             task_status.update({
                 "status": "completed",
                 "progress": 100,
@@ -288,21 +288,21 @@ async def process_generation_task(task_id: str, request: GenerateProposalRequest
                     "downloadUrl": f"/api/files/download/{uuid.uuid4()}"
                 }
             })
-            await cache.set(f"generation_task:{task_id}", json.dumps(task_status), ttl=TASK_STATUS_TTL)
+            cache.set(f"generation_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
         
         logger.info(f"Generation task completed: {task_id}")
     
     except Exception as e:
         logger.error(f"Generation task failed: {task_id}, error: {str(e)}")
-        task_json = await cache.get(f"generation_task:{task_id}")
+        task_json = cache.get(f"generation_task:{task_id}")
         if task_json:
-            task_status = json.loads(task_json)
+            task_status = task_json
             task_status.update({
                 "status": "failed",
                 "message": f"Generation failed: {str(e)}",
                 "error": str(e)
             })
-            await cache.set(f"generation_task:{task_id}", json.dumps(task_status), ttl=TASK_STATUS_TTL)
+            cache.set(f"generation_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
 
 
 async def process_regeneration_task(task_id: str, tender_file_id: str, feedback: str):
@@ -310,12 +310,12 @@ async def process_regeneration_task(task_id: str, tender_file_id: str, feedback:
     后台处理重新生成任务（基于反馈）
     """
     try:
-        task_json = await cache.get(f"generation_task:{task_id}")
+        task_json = cache.get(f"generation_task:{task_id}")
         if task_json:
-            task_status = json.loads(task_json)
+            task_status = task_json
             task_status["progress"] = 30
             task_status["message"] = f"Incorporating feedback: {feedback[:50]}..."
-            await cache.set(f"generation_task:{task_id}", json.dumps(task_status), ttl=TASK_STATUS_TTL)
+            cache.set(f"generation_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
         
         # TODO: 实际的重新生成逻辑
         # 1. 解析用户反馈
@@ -325,9 +325,9 @@ async def process_regeneration_task(task_id: str, tender_file_id: str, feedback:
         import asyncio
         await asyncio.sleep(3)
         
-        task_json = await cache.get(f"generation_task:{task_id}")
+        task_json = cache.get(f"generation_task:{task_id}")
         if task_json:
-            task_status = json.loads(task_json)
+            task_status = task_json
             task_status.update({
                 "status": "completed",
                 "progress": 100,
@@ -340,18 +340,18 @@ async def process_regeneration_task(task_id: str, tender_file_id: str, feedback:
                     "feedbackApplied": feedback
                 }
             })
-            await cache.set(f"generation_task:{task_id}", json.dumps(task_status), ttl=TASK_STATUS_TTL)
+            cache.set(f"generation_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
         
         logger.info(f"Regeneration task completed: {task_id}")
     
     except Exception as e:
         logger.error(f"Regeneration task failed: {task_id}, error: {str(e)}")
-        task_json = await cache.get(f"generation_task:{task_id}")
+        task_json = cache.get(f"generation_task:{task_id}")
         if task_json:
-            task_status = json.loads(task_json)
+            task_status = task_json
             task_status.update({
                 "status": "failed",
                 "message": f"Regeneration failed: {str(e)}",
                 "error": str(e)
             })
-            await cache.set(f"generation_task:{task_id}", json.dumps(task_status), ttl=TASK_STATUS_TTL)
+            cache.set(f"generation_task:{task_id}", task_status, ttl=TASK_STATUS_TTL)
