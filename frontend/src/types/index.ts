@@ -101,9 +101,10 @@ export interface ChatMessage {
 export interface LLMModel {
   id: string
   name: string
-  provider: 'openai' | 'deepseek' | 'qwen' | 'other'
+  provider: 'openai' | 'deepseek' | 'qwen' | 'ollama' | 'other'
   apiKey?: string
   endpoint?: string
+  modelName?: string
   temperature: number
   maxTokens: number
   isActive: boolean

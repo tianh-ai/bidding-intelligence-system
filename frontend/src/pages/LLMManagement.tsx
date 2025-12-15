@@ -34,6 +34,14 @@ const LLMManagement: React.FC = () => {
   const [form] = Form.useForm()
   const { isOpen: isChatOpen } = useChatStore()
 
+  const DEFAULT_ENDPOINT_BY_PROVIDER: Record<string, string> = {
+    openai: 'https://api.openai.com/v1',
+    deepseek: 'https://api.deepseek.com',
+    qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    // Docker 场景下，后端容器访问宿主机 Ollama
+    ollama: 'http://host.docker.internal:11434/v1',
+  }
+
   useEffect(() => {
     loadModels()
   }, [])
@@ -48,9 +56,26 @@ const LLMManagement: React.FC = () => {
     }
   }
 
+  const getErrorText = (error: any, fallback: string) => {
+    const data = error?.response?.data
+    return (
+      data?.detail ||
+      data?.message ||
+      error?.message ||
+      fallback
+    )
+  }
+
   const handleAdd = () => {
     setEditingModel(null)
     form.resetFields()
+    form.setFieldsValue({
+      provider: 'openai',
+      endpoint: DEFAULT_ENDPOINT_BY_PROVIDER.openai,
+      temperature: 0.7,
+      maxTokens: 2000,
+      isActive: true,
+    })
     setModalVisible(true)
   }
 
@@ -72,7 +97,7 @@ const LLMManagement: React.FC = () => {
           message.success('删除成功')
           loadModels()
         } catch (error: any) {
-          message.error(error.response?.data?.message || '删除失败')
+          message.error(getErrorText(error, '删除失败'))
         }
       },
     })
@@ -84,7 +109,7 @@ const LLMManagement: React.FC = () => {
       await llmAPI.testModel(modelId)
       message.success('模型测试成功！')
     } catch (error: any) {
-      message.error(error.response?.data?.message || '测试失败')
+      message.error(getErrorText(error, '测试失败'))
     } finally {
       setTestingModel(null)
     }
@@ -102,7 +127,7 @@ const LLMManagement: React.FC = () => {
       setModalVisible(false)
       loadModels()
     } catch (error: any) {
-      message.error(error.response?.data?.message || '操作失败')
+      message.error(getErrorText(error, '操作失败'))
     }
   }
 
@@ -121,6 +146,7 @@ const LLMManagement: React.FC = () => {
           openai: 'blue',
           deepseek: 'purple',
           qwen: 'orange',
+          ollama: 'default',
           other: 'default',
         }
         return <Tag color={colorMap[provider] || 'default'}>{provider.toUpperCase()}</Tag>
@@ -237,7 +263,31 @@ const LLMManagement: React.FC = () => {
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
+          onFinishFailed={(info) => {
+            const first = info?.errorFields?.[0]
+            if (first?.name?.length) {
+              form.scrollToField(first.name, { block: 'center' })
+            }
+            const msg = first?.errors?.[0] || '表单校验失败，请检查必填项'
+            message.error(msg)
+          }}
           className="mt-4"
+          onValuesChange={(changedValues) => {
+            if (changedValues.provider) {
+              const provider = changedValues.provider
+              const endpoint = form.getFieldValue('endpoint')
+              const desired = DEFAULT_ENDPOINT_BY_PROVIDER[provider]
+              if (desired && (!endpoint || endpoint === DEFAULT_ENDPOINT_BY_PROVIDER.openai)) {
+                form.setFieldsValue({ endpoint: desired })
+              }
+              if (provider === 'ollama') {
+                const apiKey = form.getFieldValue('apiKey')
+                if (!apiKey) {
+                  form.setFieldsValue({ apiKey: '' })
+                }
+              }
+            }
+          }}
         >
           <Form.Item
             label="模型名称"
@@ -257,17 +307,33 @@ const LLMManagement: React.FC = () => {
                 { label: 'OpenAI', value: 'openai' },
                 { label: 'DeepSeek', value: 'deepseek' },
                 { label: 'Qwen (通义千问)', value: 'qwen' },
+                { label: 'Ollama (本地)', value: 'ollama' },
                 { label: '其他', value: 'other' },
               ]}
             />
           </Form.Item>
 
-          <Form.Item
-            label="API Key"
-            name="apiKey"
-            rules={[{ required: true, message: '请输入 API Key' }]}
-          >
-            <Input.Password placeholder="sk-..." className="grok-input" />
+          <Form.Item shouldUpdate={(prev, curr) => prev.provider !== curr.provider} noStyle>
+            {() => {
+              const provider = form.getFieldValue('provider')
+              const isOllama = provider === 'ollama'
+              return (
+                <Form.Item
+                  label="API Key"
+                  name="apiKey"
+                  rules={
+                    isOllama
+                      ? []
+                      : [{ required: true, message: '请输入 API Key' }]
+                  }
+                >
+                  <Input.Password
+                    placeholder={isOllama ? '（Ollama 可留空）' : 'sk-...'}
+                    className="grok-input"
+                  />
+                </Form.Item>
+              )
+            }}
           </Form.Item>
 
           <Form.Item label="API 端点" name="endpoint">
@@ -307,7 +373,15 @@ const LLMManagement: React.FC = () => {
           <Form.Item>
             <Space className="w-full justify-end">
               <Button onClick={() => setModalVisible(false)}>取消</Button>
-              <Button type="primary" htmlType="submit" className="grok-btn-primary">
+              <Button
+                type="primary"
+                htmlType="button"
+                className="grok-btn-primary"
+                onClick={() => {
+                  message.info('正在提交...')
+                  form.submit()
+                }}
+              >
                 {editingModel ? '更新' : '添加'}
               </Button>
             </Space>
