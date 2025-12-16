@@ -17,12 +17,176 @@ from database import db
 class ParseEngine:
     """文档解析引擎"""
     
-    def __init__(self):
-        """初始化解析引擎"""
+    def __init__(self, use_table_skill: bool = True, use_image_skill: bool = False):
+        """
+        初始化解析引擎
+        
+        Args:
+            use_table_skill: 是否使用新的 TableExtractor Skill（默认 True）
+            use_image_skill: 是否使用新的 ImageProcessor Skill（默认 False，逐步rollout）
+        """
         self.db = db
         self.enhanced_extractor = EnhancedChapterExtractor()
-        self.image_extractor = ImageExtractor()
+        self.image_extractor = ImageExtractor()  # 保留旧实现
         self._ocr_extractor = None  # 延迟初始化OCR
+        self.use_table_skill = use_table_skill
+        self._table_extractor = None  # 延迟初始化表格提取器
+        self.use_image_skill = use_image_skill
+        self._image_processor = None  # 延迟初始化图片处理器
+    
+    @property
+    def table_extractor(self):
+        """懒加载 TableExtractor Skill"""
+        if self._table_extractor is None and self.use_table_skill:
+            from skills.table_extractor import TableExtractor
+            self._table_extractor = TableExtractor()
+        return self._table_extractor
+    
+    @property
+    def image_processor(self):
+        """懒加载 ImageProcessor Skill"""
+        if self._image_processor is None and self.use_image_skill:
+            from skills.image_processor import ImageProcessor
+            self._image_processor = ImageProcessor()
+        return self._image_processor
+    
+    def _extract_tables_from_pdf(self, file_path: str) -> list:
+        """
+        从 PDF 提取表格（使用 TableExtractor Skill）
+        
+        Args:
+            file_path: PDF 文件路径
+            
+        Returns:
+            表格列表，每个表格包含 page_number, markdown_content, headers, data
+        """
+        if not self.table_extractor:
+            return []
+        
+        try:
+            from skills.table_extractor import TableExtractorInput
+            from core.logger import logger
+            
+            # 准备输入
+            skill_input = TableExtractorInput(
+                file_path=file_path,
+                page_numbers=None,  # 提取所有页面
+                extract_options={}
+            )
+            
+            # 执行提取
+            result = self.table_extractor.execute(skill_input)
+            
+            # 转换为引擎格式（保持向后兼容）
+            tables = []
+            for table_data in result.tables:
+                tables.append({
+                    'page_number': table_data.page_number,
+                    'markdown': table_data.markdown_content,
+                    'headers': table_data.headers,
+                    'data': table_data.data,
+                    'table_id': table_data.table_id
+                })
+            
+            logger.info(f"Extracted {len(tables)} tables from {file_path} using TableExtractor Skill")
+            return tables
+            
+        except Exception as e:
+            from core.logger import logger
+            logger.error(f"Table extraction failed: {e}")
+            return []
+    
+    def _extract_images_with_skill(self, file_path: str, file_id: str, year: int) -> list:
+        """
+        使用 ImageProcessor Skill 提取图片
+        
+        Args:
+            file_path: 文件路径
+            file_id: 文件ID
+            year: 年份
+            
+        Returns:
+            图片列表（转换为旧格式以保持兼容）
+        """
+        if not self.image_processor:
+            return []
+        
+        try:
+            from skills.image_processor import ImageProcessorInput
+            from core.logger import logger
+            
+            # 准备输入
+            skill_input = ImageProcessorInput(
+                file_path=file_path,
+                file_id=file_id,
+                year=year
+            )
+            
+            # 执行提取
+            result = self.image_processor.execute(skill_input)
+            
+            # 转换为旧格式（保持向后兼容）
+            images = []
+            for img_info in result.images:
+                images.append({
+                    'image_id': img_info.image_id,
+                    'file_id': img_info.file_id,
+                    'image_path': img_info.image_path,
+                    'image_number': img_info.image_number,
+                    'page_number': img_info.page_number,
+                    'format': img_info.format,
+                    'size': img_info.size,
+                    'width': img_info.width,
+                    'height': img_info.height,
+                    'hash': img_info.hash
+                })
+            
+            logger.info(f"Extracted {len(images)} images from {file_path} using ImageProcessor Skill")
+            
+            # 保存到数据库（使用旧的保存逻辑）
+            if images:
+                self._save_images_to_db(images)
+            
+            return images
+            
+        except Exception as e:
+            from core.logger import logger
+            logger.error(f"Image extraction with Skill failed: {e}")
+            return []
+    
+    def _save_images_to_db(self, images: list):
+        """保存图片记录到数据库（兼容旧格式）"""
+        if not images:
+            return
+        
+        try:
+            from core.logger import logger
+            for img in images:
+                self.db.execute("""
+                    INSERT INTO extracted_images 
+                    (id, file_id, image_path, image_number, page_number, 
+                     format, size, width, height, hash, extracted_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (id) DO NOTHING
+                """, (
+                    img['image_id'],
+                    img['file_id'],
+                    img['image_path'],
+                    img['image_number'],
+                    img.get('page_number'),
+                    img['format'],
+                    img['size'],
+                    img['width'],
+                    img['height'],
+                    img['hash']
+                ))
+            
+            logger.info(f"Saved {len(images)} image records to database")
+            
+        except Exception as e:
+            from core.logger import logger
+            logger.error(f"Failed to save images to database: {e}", exc_info=True)
+        
         # 改进的章节模式识别
         self.chapter_patterns = [
             # 中文章节号：第一章、第一节
@@ -72,6 +236,11 @@ class ParseEngine:
                 'content': content
             }]
         
+        # 2.2 提取表格（如果是 PDF 且启用了表格提取）
+        extracted_tables = []
+        if file_path.endswith('.pdf') and self.use_table_skill:
+            extracted_tables = self._extract_tables_from_pdf(file_path)
+        
         # 3. 统一文档类型，避免违反数据库约束
         allowed_doc_types = {"tender", "proposal", "reference"}
         safe_doc_type = doc_type if doc_type in allowed_doc_types else "reference"
@@ -94,10 +263,16 @@ class ParseEngine:
                 from core.logger import logger
                 logger.warning(f"无法从数据库获取文件年份，使用当前年份: {e}")
             
-            if file_path.endswith('.pdf'):
-                extracted_images = self.image_extractor.extract_from_pdf(file_path, file_id, year)
-            elif file_path.endswith(('.docx', '.doc')):
-                extracted_images = self.image_extractor.extract_from_docx(file_path, file_id, year)
+            # 选择使用新 Skill 或旧实现
+            if self.use_image_skill and self.image_processor:
+                # 使用新的 ImageProcessor Skill
+                extracted_images = self._extract_images_with_skill(file_path, file_id, year)
+            else:
+                # 使用旧的 ImageExtractor
+                if file_path.endswith('.pdf'):
+                    extracted_images = self.image_extractor.extract_from_pdf(file_path, file_id, year)
+                elif file_path.endswith(('.docx', '.doc')):
+                    extracted_images = self.image_extractor.extract_from_docx(file_path, file_id, year)
             
             from core.logger import logger
             logger.info(f"📷 提取并保存了 {len(extracted_images)} 张图片到 /images/{year}/{file_id}/")
@@ -115,8 +290,10 @@ class ParseEngine:
             'content': content,
             'total_chapters': len(chapters),
             'chapters': chapters,
-            'images': extracted_images,  # 新增: 图片列表
-            'image_count': len(extracted_images)
+            'images': extracted_images,  # 图片列表
+            'image_count': len(extracted_images),
+            'tables': extracted_tables,  # 新增: 表格列表
+            'table_count': len(extracted_tables)  # 新增: 表格数量
         }
     
     def _parse_pdf(self, file_path: str) -> str:
