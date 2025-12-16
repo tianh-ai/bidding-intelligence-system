@@ -7,44 +7,95 @@
 ```
 mcp-servers/
 ├── README.md              # 本文件
+├── database-query/        # 数据库查询 MCP 服务器 (NEW!)
+│   ├── python/            # Python 实现
+│   ├── package.json       # MCP 配置
+│   └── README.md          # 详细文档
 ├── document-parser/       # 文档解析 MCP 服务器
 │   ├── src/               # TypeScript 源码
 │   ├── python/            # Python 后端
 │   ├── test/              # 测试套件
 │   └── README.md          # 详细文档
-└── knowledge-base/        # 知识库 MCP 服务器
-    ├── src/               # TypeScript 源码
-    ├── python/            # Python 后端
-    ├── test/              # 测试套件
-    └── README.md          # 详细文档
+├── knowledge-base/        # 知识库 MCP 服务器
+│   ├── src/               # TypeScript 源码
+│   ├── python/            # Python 后端
+│   ├── test/              # 测试套件
+│   └── README.md          # 详细文档
+├── logic-learning/        # 逻辑学习 MCP 服务器
+└── logic-checking/        # 逻辑检查 MCP 服务器
 ```
 
 ## 🚀 可用的 MCP 服务器
 
-### 1. Document Parser
+### 1. Database Query (NEW! 🎉)
 
-**路径**: `document-parser/`  
-**功能**: 提供文档解析能力（PDF、DOCX）  
+**路径**: `database-query/`  
+**功能**: 标准化数据库查询接口，支持路径自动转换  
 **工具数量**: 4 个  
 **调用方式**: AI 助手直接调用（独立运行）
 
 #### 核心功能
-- ✅ `parse_document` - 完整文档解析（文本 + 章节 + 图片）
-- ✅ `extract_chapters` - 智能章节结构提取
-- ✅ `extract_images` - 图片提取和保存
-- ✅ `get_document_info` - 文档元数据获取
+- ✅ `query_file_by_id` - 根据UUID查询文件信息
+- ✅ `search_files` - 多条件搜索文件（文件名、分类、类型、日期）
+- ✅ `get_file_stats` - 统计信息（总数、大小、分类统计）
+- ✅ `list_recent_files` - 最近上传文件列表
+
+#### 特色功能
+- 🔄 **路径自动转换**: 容器路径 ↔ 宿主机路径智能转换
+- 🐳 **Docker兼容**: 完美支持Docker挂载环境
+- 📊 **丰富查询**: 支持日期范围、文件类型、分类过滤
 
 #### 快速启动
 ```bash
-cd document-parser
-./setup.sh
+cd database-query
+python3 python/test_database_query.py
+```
+
+详细文档: [database-query/README.md](./database-query/README.md)
+
+---
+
+```json
+{
+  "mcpServers": {
+    "database-query": {
+      "command": "python3",
+      "args": [
+        "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/mcp-servers/database-query/python/database_query.py"
+      ],
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5433",
+        "DB_NAME": "bidding_db",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres123"
+      }
+    },
+    "document-parser": {
+      "command": "node",
+      "args": [
+        "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/mcp-servers/document-parser/dist/index.js"
+      ]
+    },
+    "knowledge-base": {
+      "command": "node",
+      "args": [
+        "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/mcp-servers/knowledge-base/dist/index.js"
+      ]
+    }
+  }
+}
+```etup.sh
+
+# 启用OCR
+python python/document_parser.py parse file.pdf --ocr
 ```
 
 详细文档: [document-parser/README.md](./document-parser/README.md)
 
 ---
 
-### 2. Knowledge Base
+### 3. Knowledge Base
 ### Claude Desktop 配置
 
 编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`:
@@ -237,5 +288,19 @@ done
 
 ---
 
-**最后更新**: 2025-12-14  
+## 📋 MCP服务器清单
+
+| 服务器 | 状态 | 工具数 | 语言 | 用途 |
+|--------|------|--------|------|------|
+| database-query | ✅ 生产 | 4 | Python | 数据库查询 + 路径转换 |
+| document-parser | ✅ 生产 | 4 | TS/Python | 文档解析 + OCR |
+| knowledge-base | ✅ 生产 | 6 | TS/Python | 知识库管理 |
+| logic-learning | ✅ 生产 | 5 | TS/Python | 逻辑学习 |
+| logic-checking | ✅ 生产 | 3 | TS/Python | 逻辑检查 |
+
+**总计**: 5个MCP服务器, 22个工具
+
+---
+
+**最后更新**: 2025-12-16  
 **维护者**: bidding-intelligence-system 团队
