@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "total_files": 1,
+    "passed": 0,
+    "warnings": 0,
+    "failed": 1,
+    "pass_rate": "0.0%"
+  },
+  "performance": {
+    "avg_legacy_time": "0.000s",
+    "avg_skills_time": "2.224s",
+    "avg_improvement": "-233161675.0%"
+  },
+  "details": [
+    {
+      "file_path": "/Users/tianmac/vscode/zhaobiao/bidding-intelligence-system/backend/uploads/archive/2025/12/reference/2025-12-10_未命名项目_其他文档.pdf",
+      "file_type": "pdf",
+      "legacy_time": 9.5367431640625e-07,
+      "legacy_tables": 0,
+      "legacy_images": 0,
+      "skills_time": 2.2236039638519287,
+      "skills_tables": 20,
+      "skills_images": 0,
+      "legacy_error": "DOCX或缺少库",
+      "skills_error": null,
+      "time_improvement": -233161675.0,
+      "table_diff": 20,
+      "image_diff": 0,
+      "consistency_check": "FAIL"
+    }
+  ]
+}

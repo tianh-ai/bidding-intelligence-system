@@ -10,7 +10,8 @@ import sys
 from pathlib import Path
 
 # 添加 mcp-servers/shared 到路径
-sys.path.insert(0, str(Path(__file__).parent.parent / 'mcp-servers' / 'shared'))
+shared_path = str(Path(__file__).parent.parent.parent / 'mcp-servers' / 'shared')
+sys.path.insert(0, shared_path)
 
 from rule_schema import Rule, RuleType, RulePriority, RuleSource, RulePackage
 
@@ -403,23 +404,34 @@ class LogicDatabaseDAL:
     
     def _row_to_rule(self, row: Dict[str, Any]) -> Rule:
         """将数据库行转换为 Rule 对象"""
+        # JSONB字段在psycopg2中已经被解析为dict，不需要json.loads
+        # 但如果是字符串则需要解析
+        def parse_json_field(field_value):
+            if field_value is None:
+                return None
+            if isinstance(field_value, dict):
+                return field_value
+            if isinstance(field_value, str):
+                return json.loads(field_value)
+            return field_value
+        
         return Rule(
             id=str(row['id']),
             type=RuleType(row['rule_type']),
             priority=RulePriority(row['priority']),
             source=RuleSource(row['source']),
-            condition=json.loads(row['condition']) if row['condition'] else None,
+            condition=parse_json_field(row['condition']),
             condition_description=row['condition_description'],
             description=row['description'],
             pattern=row['pattern'],
-            action=json.loads(row['action']) if row['action'] else None,
+            action=parse_json_field(row['action']),
             action_description=row['action_description'],
-            constraints=json.loads(row['constraints']) if row['constraints'] else None,
-            scope=json.loads(row['scope']) if row['scope'] else None,
+            constraints=parse_json_field(row['constraints']),
+            scope=parse_json_field(row['scope']),
             confidence=float(row['confidence']),
             version=row['version'],
             tags=row['tags'] or [],
-            reference=json.loads(row['reference']) if row['reference'] else None,
+            reference=parse_json_field(row['reference']),
             fix_suggestion=row['fix_suggestion'],
             examples=row['examples'] or [],
             counter_examples=row['counter_examples'] or [],

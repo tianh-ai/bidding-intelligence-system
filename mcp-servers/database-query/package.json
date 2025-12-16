@@ -1,0 +1,38 @@
+{
+  "name": "bidding-database",
+  "version": "1.0.0",
+  "description": "Database Query MCP Server - 标书智能系统数据库查询接口",
+  "type": "module",
+  "main": "python/database_query.py",
+  "scripts": {
+    "start": "python3 python/database_query.py",
+    "test": "python3 python/test_database_query.py"
+  },
+  "mcp": {
+    "server": {
+      "command": "python3",
+      "args": [
+        "python/database_query.py"
+      ],
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5433",
+        "DB_NAME": "bidding_db",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres123"
+      }
+    }
+  },
+  "dependencies": {
+    "mcp": ">=1.0.0",
+    "asyncpg": ">=0.29.0"
+  },
+  "keywords": [
+    "mcp",
+    "database",
+    "postgresql",
+    "bidding-system"
+  ],
+  "author": "Bidding Intelligence System",
+  "license": "MIT"
+}

@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "total_files": 1,
+    "passed": 1,
+    "warnings": 0,
+    "failed": 0,
+    "pass_rate": "100.0%"
+  },
+  "performance": {
+    "avg_legacy_time": "2.076s",
+    "avg_skills_time": "2.179s",
+    "avg_improvement": "-4.9%"
+  },
+  "details": [
+    {
+      "file_path": "/app/uploads/archive/2025/12/reference/2025-12-10_未命名项目_其他文档.pdf",
+      "file_type": "pdf",
+      "legacy_time": 2.076084613800049,
+      "legacy_tables": 20,
+      "legacy_images": 5,
+      "skills_time": 2.178506851196289,
+      "skills_tables": 20,
+      "skills_images": 5,
+      "legacy_error": null,
+      "skills_error": null,
+      "time_improvement": -4.9334327086393355,
+      "table_diff": 0,
+      "image_diff": 0,
+      "consistency_check": "PASS"
+    }
+  ]
+}

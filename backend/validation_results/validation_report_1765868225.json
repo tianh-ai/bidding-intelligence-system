@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "total_files": 1,
+    "passed": 0,
+    "warnings": 0,
+    "failed": 1,
+    "pass_rate": "0.0%"
+  },
+  "performance": {
+    "avg_legacy_time": "0.001s",
+    "avg_skills_time": "0.001s",
+    "avg_improvement": "+30.7%"
+  },
+  "details": [
+    {
+      "file_path": "../uploads/archive/2025/12/reference/2025-12-10_未命名项目_其他文档.pdf",
+      "file_type": "pdf",
+      "legacy_time": 0.0010411739349365234,
+      "legacy_tables": 0,
+      "legacy_images": 0,
+      "skills_time": 0.0007219314575195312,
+      "skills_tables": 0,
+      "skills_images": 0,
+      "legacy_error": "'ParseEngine' object has no attribute 'extract_from_pdf'",
+      "skills_error": "文件不存在: ../uploads/archive/2025/12/reference/2025-12-10_未命名项目_其他文档.pdf",
+      "time_improvement": 30.661781543393634,
+      "table_diff": 0,
+      "image_diff": 0,
+      "consistency_check": "FAIL"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "total_files": 1,
+    "passed": 0,
+    "warnings": 0,
+    "failed": 1,
+    "pass_rate": "0.0%"
+  },
+  "performance": {
+    "avg_legacy_time": "0.000s",
+    "avg_skills_time": "0.192s",
+    "avg_improvement": "-20116875.0%"
+  },
+  "details": [
+    {
+      "file_path": "/app/uploads/temp/23c379c7/ee15b427-376f-456e-8aab-ab6789eb4fb3.pdf",
+      "file_type": "pdf",
+      "legacy_time": 9.5367431640625e-07,
+      "legacy_tables": 0,
+      "legacy_images": 0,
+      "skills_time": 0.1918504238128662,
+      "skills_tables": 2,
+      "skills_images": 0,
+      "legacy_error": "DOCX或缺少库",
+      "skills_error": null,
+      "time_improvement": -20116875.0,
+      "table_diff": 2,
+      "image_diff": 0,
+      "consistency_check": "FAIL"
+    }
+  ]
+}

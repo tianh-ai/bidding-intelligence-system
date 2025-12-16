@@ -9,8 +9,10 @@ from pydantic import BaseModel
 import hashlib
 import uuid
 import os
+import sys
 import shutil
 import json
+from pathlib import Path
 from datetime import datetime
 from engines import ParseEngine
 from engines.document_classifier import DocumentClassifier
@@ -474,12 +476,49 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
                 pass
             raise e
         
-        # 2. 解析文件（使用安全的文档类型，避免数据库约束冲突）
+        # 2. 解析文件（使用增强的章节内容提取器）
         allowed_doc_types = {"tender", "proposal", "reference"}
         default_doc_type = "reference"
-        parsed_result = parse_engine.parse(temp_path, default_doc_type, save_to_db=False)
-        content = parsed_result.get('content', '')
-        chapters = parsed_result.get('chapters', [])
+        
+        # 使用增强的解析引擎（包含章节内容和格式提取）
+        try:
+            from engines.chapter_content_extractor import get_chapter_content_extractor
+            from engines.format_extractor import get_format_extractor
+            
+            # 先用传统方法提取基本内容
+            parsed_result = parse_engine.parse(temp_path, default_doc_type, save_to_db=False)
+            content = parsed_result.get('content', '')
+            
+            # 使用增强的章节提取器获取章节内容
+            content_extractor = get_chapter_content_extractor(use_ollama=False)
+            chapters = content_extractor.extract_chapters_with_content(content)
+            
+            # 对于DOCX文件，提取格式信息
+            format_info = {}
+            if temp_path.lower().endswith(('.docx', '.doc')):
+                try:
+                    format_extractor = get_format_extractor()
+                    format_info = format_extractor.extract_format_from_docx(temp_path)
+                    
+                    # 为每个章节添加格式信息
+                    chapter_formats = format_extractor.extract_chapter_formats(temp_path, chapters)
+                    for i, ch in enumerate(chapters):
+                        if i < len(chapter_formats):
+                            ch['structure_data'] = chapter_formats[i]
+                    
+                    logger.info(f"  ✅ 增强解析器: {len(chapters)} 章节, 格式信息已提取")
+                except Exception as fmt_error:
+                    logger.warning(f"  ⚠️  格式提取失败: {fmt_error}")
+            else:
+                logger.info(f"  ✅ 增强解析器: {len(chapters)} 章节（非DOCX，无格式信息）")
+            
+        except Exception as parse_error:
+            logger.warning(f"  ⚠️  增强解析器失败，回退到传统解析: {parse_error}")
+            # 回退到传统方法
+            parsed_result = parse_engine.parse(temp_path, default_doc_type, save_to_db=False)
+            content = parsed_result.get('content', '')
+            chapters = parsed_result.get('chapters', [])
+            format_info = {}
         
         # 提取元数据
         metadata = {
@@ -583,7 +622,7 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
                 (file_id, semantic_filename, archive_path, file_ext, safe_category, content)
             )
             
-            # 保存章节
+            # 保存章节（包含content和structure_data）
             logger.info(f"  📊 章节数据样例: {chapters[:2] if chapters else '无'}")
             for idx, chapter in enumerate(chapters):
                 chapter_id = str(uuid.uuid4())
@@ -596,23 +635,36 @@ def parse_and_archive_file(file_id: str, temp_path: str, filename: str):
                 clean_title = re.sub(r'[\.。]{3,}', '', clean_title)  # 去除连续点号
                 clean_title = clean_title.strip()
                 
+                # 获取章节内容和格式信息
+                chapter_content = chapter.get('content', '')
+                structure_data = chapter.get('structure_data', {})
+                
+                # 如果structure_data是dict，转为JSON
+                if isinstance(structure_data, dict):
+                    structure_data_json = json.dumps(structure_data, ensure_ascii=False)
+                else:
+                    structure_data_json = '{}'
+                
                 db.execute(
                     """
                     INSERT INTO chapters (
                         id, file_id, chapter_number, chapter_title, 
-                        chapter_level, content, position_order, created_at
+                        chapter_level, content, position_order, structure_data, created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, NOW())
                     """,
                     (
                         chapter_id, file_id,
                         chapter.get('chapter_number', str(idx+1)),
                         clean_title,
                         chapter.get('chapter_level', chapter.get('level', 1)),
-                        chapter.get('content', ''),
-                        idx + 1
+                        chapter_content,  # 现在有内容了！
+                        idx + 1,
+                        structure_data_json  # 格式信息
                     )
                 )
+                
+            logger.info(f"  📚 知识库记录已保存（包含内容和格式信息）")
             
             logger.info(f"  📚 知识库记录已保存")
             

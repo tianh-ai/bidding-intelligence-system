@@ -25,8 +25,9 @@ from database import db
 from core.logger import logger
 
 # 导入共享的数据模型
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'mcp-servers'))
-from shared.kb_interface import ChapterData, FileMetadata
+shared_path = str(Path(__file__).parent.parent.parent / 'mcp-servers' / 'shared')
+sys.path.insert(0, shared_path)
+from kb_interface import ChapterData, FileMetadata
 
 
 class KBClient:
@@ -53,9 +54,10 @@ class KBClient:
         file_info = self.db.query_one(
             """
             SELECT id, filename, filetype, 
-                   (SELECT COUNT(*) FROM chapters WHERE file_id = files.id) as total_chapters,
-                   COALESCE((SELECT MAX(page_count) FROM chapters WHERE file_id = files.id), 0) as total_pages,
-                   created_at as uploaded_at
+                   (SELECT COUNT(*) FROM chapters WHERE file_id = uploaded_files.id) as total_chapters,
+                   0 as total_pages,
+                   created_at as uploaded_at,
+                   status as processing_status
             FROM uploaded_files
             WHERE id = %s
             """,
@@ -69,11 +71,12 @@ class KBClient:
             id=file_info['id'],
             filename=file_info['filename'],
             filetype=file_info['filetype'],
-            file_size=0,  # 可选，如果需要从文件系统读取
+            file_size=0,
             total_chapters=file_info['total_chapters'],
             total_pages=file_info['total_pages'],
             uploaded_at=file_info['uploaded_at'],
             processed_at=file_info.get('processed_at'),
+            processing_status=file_info.get('processing_status', 'unknown'),
             tags=file_info.get('tags', []),
             is_tender=file_info.get('is_tender')
         )

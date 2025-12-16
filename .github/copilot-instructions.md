@@ -10,9 +10,12 @@ Concise, actionable guidance focused on discoverable patterns and critical conte
 1. **DOCKER_PRINCIPLES.md** - Docker使用原则（最优先！）
 2. **PORT_CONSISTENCY.md** - 端口一致性原则（强制！）
 3. **CODE_PROTECTION.md** - 代码保护规范（必读！）
-4. **FRONTEND_BEHAVIOR.md** - 前端行为规范
-5. **README.md** - 项目总览
-6. **backend/README.md** - 后端架构
+4. **MODULAR_ARCHITECTURE.md** - 模块化架构设计（新增！）
+5. **FRONTEND_BEHAVIOR.md** - 前端行为规范
+6. **README.md** - 项目总览
+7. **backend/README.md** - 后端架构
+
+**📚 完整文档索引**: 见 [DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)
 
 **核心规则（违反即失败）：**
 - 🔒 **不要修改已经验证工作正常的代码！**

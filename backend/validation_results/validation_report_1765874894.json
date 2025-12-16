@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "total_files": 1,
+    "passed": 1,
+    "warnings": 0,
+    "failed": 0,
+    "pass_rate": "100.0%"
+  },
+  "performance": {
+    "avg_legacy_time": "0.193s",
+    "avg_skills_time": "0.208s",
+    "avg_improvement": "-7.7%"
+  },
+  "details": [
+    {
+      "file_path": "/app/uploads/temp/23c379c7/ee15b427-376f-456e-8aab-ab6789eb4fb3.pdf",
+      "file_type": "pdf",
+      "legacy_time": 0.19334125518798828,
+      "legacy_tables": 2,
+      "legacy_images": 0,
+      "skills_time": 0.20823907852172852,
+      "skills_tables": 2,
+      "skills_images": 0,
+      "legacy_error": null,
+      "skills_error": null,
+      "time_improvement": -7.705454957998945,
+      "table_diff": 0,
+      "image_diff": 0,
+      "consistency_check": "PASS"
+    }
+  ]
+}

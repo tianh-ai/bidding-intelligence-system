@@ -353,9 +353,14 @@ if __name__ == '__main__':
         print(json.dumps(result, ensure_ascii=False, indent=2))
     
     elif args.command == 'chapters':
-        with open(args.file_path, 'r') as f:
-            content = f.read()
-        chapters = parser.extract_chapters(content)
+        # 先解析文档获取内容和章节
+        result = parser.parse_document(
+            file_path=args.file_path,
+            extract_images=False,
+            ocr_enabled=args.ocr
+        )
+        # 返回章节信息
+        chapters = result.get('chapters', [])
         print(json.dumps(chapters, ensure_ascii=False, indent=2))
     
     elif args.command == 'images':
