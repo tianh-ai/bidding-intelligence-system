@@ -7,6 +7,8 @@
 
 > **AI驱动的智能标书分析与生成系统** - 采用三层代理架构 + 本体知识图谱 + 多代理闭环评估，实现准确率>95%，LLM成本节省85%
 
+📱 **[在 iPad 上使用 VSCode 开发指南](VSCODE_IPAD_GUIDE.md)** | 🚀 **[快速开始](#-快速开始)** | 📚 **[使用指南](#-使用指南)** | 🐳 **[Docker 部署](DOCKER_GUIDE.md)**
+
 ---
 
 ## 📖 项目简介
@@ -688,6 +690,6 @@ server {
 
 **🎉 专家级AI标书系统 - 让投标更智能 🎉**
 
-[开始使用](#-快速开始) · [查看文档](docs/) · [报告问题](https://github.com/tianh-ai/bidding-intelligence-system/issues)
+[开始使用](#-快速开始) · [查看文档](docs/) · [iPad 开发](VSCODE_IPAD_GUIDE.md) · [报告问题](https://github.com/tianh-ai/bidding-intelligence-system/issues)
 
 </div>
