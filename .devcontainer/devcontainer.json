@@ -1,0 +1,115 @@
+{
+  "name": "Bidding Intelligence System",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "backend",
+  "workspaceFolder": "/workspace",
+  
+  // 使用 Docker-in-Docker 功能
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    }
+  },
+  
+  // 安装 VSCode 扩展
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "eamodio.gitlens",
+        "github.copilot",
+        "bradlc.vscode-tailwindcss",
+        "dsznajder.es7-react-js-snippets"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": false,
+        "python.linting.ruffEnabled": true,
+        "python.formatting.provider": "black",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": true
+        },
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter"
+        },
+        "[javascript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescriptreact]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[json]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        }
+      }
+    }
+  },
+  
+  // 容器创建后执行的命令
+  "postCreateCommand": "bash -c 'cd backend && pip install -r requirements.txt && cd ../frontend && npm install'",
+  
+  // 端口转发配置
+  "forwardPorts": [18888, 13000, 5433, 6380],
+  
+  // 端口属性
+  "portsAttributes": {
+    "18888": {
+      "label": "Backend API",
+      "onAutoForward": "notify",
+      "protocol": "http"
+    },
+    "13000": {
+      "label": "Frontend",
+      "onAutoForward": "openBrowser",
+      "protocol": "http"
+    },
+    "5433": {
+      "label": "PostgreSQL",
+      "onAutoForward": "ignore"
+    },
+    "6380": {
+      "label": "Redis",
+      "onAutoForward": "ignore"
+    }
+  },
+  
+  // 挂载 Docker socket
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  
+  // 环境变量（从 GitHub Secrets 中读取）
+  "remoteEnv": {
+    "PYTHONPATH": "${containerWorkspaceFolder}/backend",
+    "NODE_ENV": "development"
+  },
+  
+  // 容器用户
+  "remoteUser": "root",
+  
+  // 生命周期脚本
+  "postStartCommand": "bash -c 'echo \"✅ Codespace is ready!\" && ./check_ports.sh'",
+  
+  // 资源限制（可选）
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb",
+    "storage": "32gb"
+  }
+}
